@@ -37,8 +37,28 @@ export const SUPABASE_KEY = 'sb_publishable_rVzwH5plpZ3Z9yJvw4BLIg_4ZuJC0oT';
  */
 export const CUSTOMER_ID = 'vanguard';
 
-/** Operational DB identity for source attribution; reads use the local server. */
+/** Operational DB identity for source attribution; reads go through the SAR API below. */
 export const OPS_URL = 'https://lkcfbgnuodqzvowschjn.supabase.co';
+
+/**
+ * Where the SAR API (Operations data, Ask SAR, Bingo Scout) is served.
+ *
+ *   On the owner's laptop (localhost / 127.0.0.1) the Vite dev server answers
+ *   `/api/...` itself, exactly as before.
+ *   Everywhere else (the GitHub Pages site) the same routes are served by the
+ *   Supabase Edge Function `sar2-api` on the Operations project.
+ *
+ * Either way the browser sends only its bms-production sign-in token; no
+ * database or Anthropic credential is ever in the browser.
+ */
+export const LOCAL_API_BASE = '/api';
+export const EDGE_API_BASE = `${OPS_URL}/functions/v1/sar2-api`;
+export const LOCAL_HOSTNAMES = Object.freeze(['localhost', '127.0.0.1']);
+
+/** The one decision: which API base this page should call. */
+export function apiBase(hostname = globalThis.location?.hostname ?? '') {
+  return LOCAL_HOSTNAMES.includes(hostname) ? LOCAL_API_BASE : EDGE_API_BASE;
+}
 
 /** How long cached reads stay fresh before a background refresh. */
 export const CACHE_TTL_MS = 5 * 60 * 1000;

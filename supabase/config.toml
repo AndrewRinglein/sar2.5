@@ -1,0 +1,10 @@
+# Supabase CLI settings for the SAR Edge Function. Only the [functions] block
+# matters here; this repository does not manage the database with the CLI.
+project_id = "sar2"
+
+[functions.sar2-api]
+# The caller's token comes from bms-production, a DIFFERENT Supabase project,
+# so the gateway's own JWT check would reject every request. The function
+# verifies the token itself against bms-production (server/api-core.mjs,
+# authorize) before doing anything else. Deploy with this set to false.
+verify_jwt = false

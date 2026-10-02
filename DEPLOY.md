@@ -1,4 +1,42 @@
-# Running New SAR locally
+# Running SAR 2.0
+
+SAR runs in two places, with the same code behind both:
+
+- **Hosted:** https://andrewringlein.github.io/sar2.5/ — works from any computer, no laptop needed.
+- **Local:** http://127.0.0.1:5173/ on the owner's laptop (`npm run dev`), unchanged.
+
+## Hosted version (GitHub Pages + Supabase Edge Function)
+
+The website itself is static and is published by GitHub Pages on every push to `main` (`.github/workflows/pages.yml`). Three things need a server — Operations data (Managers, Inventory, Commission, Staff Overview), Ask SAR and Bingo Scout — and on the hosted site they are answered by a Supabase Edge Function called **`sar2-api`** on the **Operational DB** project (`lkcfbgnuodqzvowschjn`):
+
+| Browser asks for | Served by |
+| --- | --- |
+| `…/functions/v1/sar2-api/operations` | read-only Operations data (same allowlist as locally, no pay columns) |
+| `…/functions/v1/sar2-api/ask-sar` | Ask SAR |
+| `…/functions/v1/sar2-api/competitive` | Bingo Scout's public text/email monitor |
+
+The page decides by its address: on `localhost` / `127.0.0.1` it calls the laptop's own `/api/...`; anywhere else it calls the Edge Function (`apiBase` in `src/lib/config.js`). Either way it sends only the person's normal SAR sign-in. The function checks that sign-in with the analytics project and requires Vanguard access before it does anything; without it the answer is "Please sign in". Only the hosted site and the local dev address may call it from a browser.
+
+### The one owner step
+
+Ask SAR needs the Anthropic key stored as a secret on the function. Once:
+
+1. Open Supabase and choose the **Operational DB** project.
+2. Go to **Edge Functions → Secrets**.
+3. Add a secret named `SAR_ANTHROPIC_API_KEY` with the Anthropic key (it starts `sk-ant-`) as its value. Save.
+
+That is all. The key stays on Supabase; it is never sent to the browser. (Optional: a secret `SAR_ANTHROPIC_MODEL` changes the model; it defaults to `claude-sonnet-5-5`. If `SAR_ANTHROPIC_API_KEY` is missing, the function falls back to the shared `sar2-anthropic-key` Vault secret, the same as the laptop does.)
+
+The database connection needs no setup: Supabase gives every Edge Function its own project's connection (`SUPABASE_DB_URL`). The function reads only the allowlisted columns, in a read-only transaction, over a verified TLS connection.
+
+### What is deployed (for whoever deploys)
+
+- `supabase/functions/sar2-api/index.ts` — the whole function in one generated file (entrypoint `index.ts`). It is built from `server/edge-entry.mjs`, the shared server code (`server/api-core.mjs`, `server/edge-api.mjs`, `server/ops-read.mjs`, `server/competitive.mjs`, `src/lib/ops-schema.js`, `src/lib/config.js`) and `knowledge/bingo-knowledge.md`. Its only import is `npm:pg@8`.
+- `supabase/config.toml` — sets `verify_jwt = false` for `sar2-api`. This is required: the sign-in token comes from the analytics project, not the Operational DB, so Supabase's own check would refuse every request. The function does its own check instead.
+
+After changing anything under `server/`, `src/lib/config.js`, `src/lib/ops-schema.js` or `knowledge/`, run `npm run build:edge`, commit the regenerated `index.ts`, and redeploy (for example `supabase functions deploy sar2-api --project-ref lkcfbgnuodqzvowschjn --no-verify-jwt`). `npm test` fails if the committed bundle is out of date. **Editing the knowledge file changes the hosted Ask SAR only after a rebuild and redeploy**; the laptop picks it up immediately.
+
+## Running SAR locally (the laptop)
 
 **Bingo Scout:** Choose Plan & P&L → Bingo Scout after signing in. It uses the server's read-only `/api/competitive` route to the existing public text/email monitor. See [BINGO-SCOUT-INTEGRATION.md](BINGO-SCOUT-INTEGRATION.md) for the data boundary, model assumptions and standalone local review (`npm run preview:scout`).
 
@@ -55,4 +93,4 @@ npm run build
 
 This runs token checks, automated tests and the frontend build. Live database and Anthropic behavior still require valid owner credentials. If Operations is unavailable, inspect the local server configuration and database connectivity; there is deliberately no in-app setup prompt. Ask SAR can still give its limited local summary answers when the AI service is unavailable.
 
-`preview.html` is a generated screen gallery, not the interactive application. The former static GitHub Pages deployment instructions are superseded: a static-only host cannot run the Operations or Ask SAR API. Keep the local Node server running for this demo.
+`preview.html` is a generated screen gallery, not the interactive application. The hosted site gets its server routes from the `sar2-api` Edge Function described above; the laptop does not need to be running for it.
