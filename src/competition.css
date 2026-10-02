@@ -1,0 +1,30 @@
+.competition .screen-head { display:block; }
+.scout-controls,.scout-filters,.scout-tabs { display:flex; flex-wrap:wrap; gap:var(--s-3); margin-bottom:var(--s-4); }
+.scout-controls { display:block; }
+.scout-filters { align-items:end; }
+.competition label { display:grid; gap:var(--s-1); font-size:var(--t-sm); max-width:22rem; }
+.competition select,.competition input { max-width:100%; padding:var(--s-2); }
+.competition input[type=number] { width:12rem; }
+.scout-map { height:28rem; border:1px solid var(--hair); border-radius:var(--r-sm); margin-bottom:var(--s-4); z-index:0; }
+.scout-coverage { margin-bottom:var(--s-4); }
+.scout-coverage summary { cursor:pointer; }
+.scout-coverage-list { max-height:24rem; overflow:auto; }
+.scout-table { overflow:auto; }
+.competition td { white-space:normal; min-width:7rem; }
+.competition td small { display:block; }
+.competition .panel { margin-bottom:var(--s-3); }
+.scout-evidence { padding:var(--s-4); }
+.scout-message { white-space:pre-wrap; overflow-wrap:anywhere; max-height:22rem; overflow:auto; }
+.scout-source { color:var(--accent); font-size:var(--t-sm); font-weight:600; }
+.scout-notice { background:var(--warn-soft); padding:var(--s-3); border-left:3px solid var(--warn); }
+.scout-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(10rem,1fr)); gap:var(--s-3); }
+.scout-kpis strong { display:block; font-size:var(--t-xl); }
+.scout-features { display:grid; grid-template-columns:repeat(auto-fit,minmax(14rem,1fr)); gap:var(--s-3); }
+.scout-chart { height:12rem; display:flex; align-items:end; gap:var(--s-1); padding:var(--s-4); background:var(--surface); margin-bottom:var(--s-3); }
+.scout-bar { flex:1; background:var(--accent); min-width:2px; }
+.scout-area-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--s-4); margin-top:var(--s-4); }
+.scout-area-card { min-width:0; padding:var(--s-4); }
+.scout-area-heading { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:var(--s-2); }
+.scout-area-map { height:19rem; margin:var(--s-3) 0 0; }
+.scout-area-title { margin-bottom:var(--s-4); }
+@media(max-width:850px) { .scout-area-grid { grid-template-columns:1fr; } }

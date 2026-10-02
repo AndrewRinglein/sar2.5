@@ -1,0 +1,27 @@
+{
+  "name": "sar2",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "SAR — Session Analysis Reporting. Read-only analytics for Vanguard Music & Performing Arts.",
+  "scripts": {
+    "dev": "vite",
+    "build": "npm run lint:tokens && npm test && vite build",
+    "preview": "vite preview",
+    "lint:tokens": "node scripts/lint-tokens.mjs",
+    "test": "node --test test/*.test.mjs",
+    "preview:html": "node scripts/preview.mjs",
+    "configure:local": "node scripts/configure-local.mjs",
+    "diagnose:local": "node scripts/diagnose-local.mjs",
+    "preview:scout": "node scripts/preview-scout.mjs"
+  },
+  "devDependencies": {
+    "jsdom": "^25.0.1",
+    "vite": "^5.4.11"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.112.3",
+    "leaflet": "1.9.4",
+    "pg": "^8.23.0"
+  }
+}

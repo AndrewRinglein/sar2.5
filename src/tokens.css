@@ -1,0 +1,178 @@
+/* ============================================================================
+   SAR 2.0 — DESIGN TOKENS
+
+   THIS IS THE ONLY FILE IN THE PROJECT THAT MAY CONTAIN A COLOUR LITERAL.
+
+   `npm run lint:tokens` fails the build if a hex value, rgb() or hsl() appears
+   anywhere else in src/. That rule exists because SAR 1.0 has no token layer at
+   all: every colour, radius and shadow is a repeated literal across 20,416
+   lines, with four different greens all meaning "good" (SPEC §2.4). Changing
+   "the green" there means finding four values in an unknown number of places.
+
+   ONE EXCEPTION, deliberate: product category colours come from the database
+   per tenant (`analytics_product_categories.color_*`) and are applied inline
+   from data. Those are content, not design, and must never be hardcoded here.
+
+   ACCESSIBILITY — every value below is measured, not chosen by eye.
+   The v9 mockup palette failed twice and both are fixed here:
+
+     · --ink-4 was #a3a394 at 2.49:1 on surface. WCAG AA needs 4.5:1 for text,
+       and it was used for nearly every small label, axis tick and table header
+       in the product. Now #6d6d61 at 5.10:1.
+
+     · --pos and --neg were #186b4c and #a53d1a — near-identical relative
+       luminance (0.1123 vs 0.1141), so 1.01:1 apart in greyscale. To a
+       red-green colourblind reader they were the same colour. Now separated in
+       LIGHTNESS as well as hue: 1.52:1 apart.
+
+   Colour still never carries meaning alone anywhere in this product — deltas
+   also carry ▲▼ glyphs and signs. This is the second line of defence, not the
+   first.
+   ========================================================================== */
+
+:root {
+
+  /* ---- surfaces -----------------------------------------------------------
+     Warm parchment, never pure white. The 2026 counter-trend to blue-on-white
+     SaaS; reads calmer for something someone stares at nightly. */
+  --canvas:      #f3f1ea;   /* page background */
+  --surface:     #fdfcf8;   /* cards, panels */
+  --surface-2:   #f8f6ef;   /* table headers, insets */
+  --surface-3:   #eeebe1;   /* chips, tracks */
+  --track:       #e5e1d5;   /* progress/bar backgrounds */
+
+  /* ---- rail (the one dark region) ---------------------------------------- */
+  --rail:        #23231e;
+  --rail-2:      #32322b;   /* hover / active row */
+  --rail-3:      #43433a;   /* dividers */
+  --rail-ink:    #e6e4da;   /* text on rail */
+  --rail-ink-2:  #b6b4a8;   /* secondary text on rail */
+  --rail-ink-3:  #8b8b7e;   /* tertiary text on rail */
+
+  /* ---- ink — warmed, never #000 ------------------------------------------
+     Contrast measured against BOTH --surface and --canvas; the weaker of the
+     two is what is quoted. */
+  --ink:         #22221c;   /* 14.15:1  AAA  body */
+  --ink-2:       #4e4e44;   /*  7.44:1  AAA  secondary */
+  --ink-3:       #63635a;   /*  5.37:1  AA   muted */
+  --ink-4:       #6d6d61;   /*  4.63:1  AA   labels, axes, captions */
+
+  /* ---- hairlines --------------------------------------------------------- */
+  --hair:        rgba(34, 34, 28, 0.11);
+  --hair-2:      rgba(34, 34, 28, 0.06);
+
+  /* ---- one accent, for interaction only ---------------------------------- */
+  --accent:      #3d3ad6;   /*  6.70:1  AA */
+  --accent-2:    #6b63e8;   /* rail active marker */
+  --accent-soft: rgba(61, 58, 214, 0.075);
+  --accent-line: rgba(61, 58, 214, 0.24);
+
+  /* ---- semantic — good / bad / caution -----------------------------------
+     pos and neg are 1.52:1 apart in greyscale, so they survive colourblindness
+     and monochrome printing. */
+  --pos:         #0f5c40;   /*  7.08:1  AAA */
+  --pos-soft:    rgba(15, 92, 64, 0.10);
+  --neg:         #b04f1d;   /*  4.67:1  AA */
+  --neg-soft:    rgba(176, 79, 29, 0.10);
+  --warn:        #7d5806;   /*  5.68:1  AA */
+  --warn-soft:   rgba(125, 88, 6, 0.12);
+
+  /* ---- gold — jackpots ONLY ----------------------------------------------
+     Reserved. If gold appears anywhere that is not a progressive jackpot, that
+     is a bug. */
+  --gold:        #8a6109;   /*  4.90:1  AA */
+  --gold-soft:   rgba(138, 97, 9, 0.11);
+
+  /* ---- categorical series -------------------------------------------------
+     For chart series with no inherent good/bad meaning. Separated by hue AND
+     lightness so they survive greyscale; capped at five because beyond that no
+     palette stays distinguishable. */
+  --series-1:    #2f5fd0;
+  --series-2:    #0e7a6e;
+  --series-3:    #b06a09;
+  --series-4:    #a3306e;
+  --series-5:    #5b4bbd;
+
+  /* ---- leaderboard metric cards ------------------------------------------
+     The five universal cards are colour-coded like SAR 1.0's, so a column is
+     recognisable at a glance while scanning down the board. Category cards
+     take their colour from the database instead — per-tenant content, applied
+     inline, and the one documented exception to this file's monopoly. */
+  --card-net:    #0f5c40;
+  --card-gross:  #2f5fd0;
+  --card-margin: #5b4bbd;
+  --card-rpa:    #8a6109;
+  --card-att:    #a3306e;
+
+  /* ---- reporting boxes ----------------------------------------------------
+     Eight boxes, eight identities, matching SAR 1.0 so the screen is
+     recognisable. Each has a soft fill, a stronger label and a strong value.
+     Every pair is checked against the fill it sits on, not against white. */
+  --rp-sales-bg:      #eff6ff;  --rp-sales-ink:      #1e40af;  --rp-sales-val:      #1d4ed8;
+  --rp-payouts-bg:    #fef2f2;  --rp-payouts-ink:    #991b1b;  --rp-payouts-val:    #b91c1c;
+  --rp-net-bg:        #f0fdf4;  --rp-net-ink:        #166534;  --rp-net-val:        #15803d;
+  --rp-products-bg:   #faf5ff;  --rp-products-ink:   #581c87;  --rp-products-val:   #7e22ce;
+  --rp-margin-bg:     #fffbeb;  --rp-margin-ink:     #92400e;  --rp-margin-val:     #b45309;
+  --rp-rpa-bg:        #ecfeff;  --rp-rpa-ink:        #155e75;  --rp-rpa-val:        #0e7490;
+  --rp-profit-bg:     #eef2ff;  --rp-profit-ink:     #3730a3;  --rp-profit-val:     #4338ca;
+  --rp-attendance-bg: #f0fdfa;  --rp-attendance-ink: #115e59;  --rp-attendance-val: #0f766e;
+
+  /* ---- sell-through bands — SPEC §17: 90 / 70 --------------------------- */
+  --st-good: #0f5c40;
+  --st-fair: #7d5806;
+  --st-poor: #b04f1d;
+
+  /* ---- radius — nested, small controls get small radii -------------------- */
+  --r-xs: 4px;    /* inline chips, badges */
+  --r-sm: 6px;    /* buttons, inputs */
+  --r-md: 9px;    /* small cards */
+  --r-lg: 13px;   /* panels */
+
+  /* ---- shadow — hairline first, depth only for things that truly float ---- */
+  --sh-1:   0 0 0 1px var(--hair);
+  --sh-2:   0 0 0 1px var(--hair), 0 1px 2px rgba(34, 34, 28, 0.04);
+  --sh-3:   0 1px 2px rgba(34, 34, 28, 0.05), 0 2px 6px -3px rgba(34, 34, 28, 0.07);
+  --sh-pop: 0 0 0 1px var(--hair), 0 18px 44px -14px rgba(34, 34, 28, 0.28),
+            0 4px 10px -4px rgba(34, 34, 28, 0.10);
+
+  /* ---- spacing — strict 4px scale, no ad hoc values ----------------------- */
+  --s-1:  4px;
+  --s-2:  8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-8: 32px;
+  --s-10: 40px;
+
+  /* ---- type -------------------------------------------------------------- */
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display: 'Newsreader', Georgia, serif;
+
+  --t-xs:   10px;
+  --t-sm:   11.5px;
+  --t-base: 13.5px;
+  --t-md:   15px;
+  --t-lg:   19px;
+  --t-xl:   26px;
+
+  /* ---- layout ------------------------------------------------------------ */
+  --rail-w:      206px;
+  --inspector-w: 404px;
+  --bar-h:       46px;
+
+  /* ---- motion ------------------------------------------------------------ */
+  --ease:   cubic-bezier(0.4, 0, 0.2, 1);
+  --fast:   0.12s;
+  --normal: 0.22s;
+}
+
+/* Respect a user who has asked for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  :root { --fast: 0.01ms; --normal: 0.01ms; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

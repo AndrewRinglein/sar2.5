@@ -1,0 +1,61 @@
+# ============================================================================
+# SAR 2.0 — deploy to GitHub Pages
+#
+# This file only takes effect when sar2/ is the ROOT of its own repository.
+# GitHub reads .github/workflows only from a repo root, so while this folder
+# still sits inside the e-commerce repo the file is inert — it cannot trigger
+# anything there.
+#
+# Vite's `base` is './' (relative), so the build works whether the site is
+# served from a domain root or from a /repo-name/ subpath. Nothing here needs
+# to change if the app later moves to vanguard.bingobuyin.com/sar2/.
+# ============================================================================
+
+name: Deploy SAR 2.0 to Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:        # lets you redeploy from the Actions tab, on demand
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two deploys race. A queued run waits rather than cancelling, so a
+# push is never silently dropped.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # `npm run build` runs lint:tokens first, so a stray colour literal fails
+      # the deploy rather than shipping.
+      - run: npm run build
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
