@@ -278,7 +278,12 @@ function sortable(cols, rows, sortKey, desc, onSort) {
 
   if (onSort) {
     for (const th of table.querySelectorAll('[data-sort]')) {
+      // Reachable and operable by keyboard, not only by mouse.
+      th.tabIndex = 0;
       th.addEventListener('click', () => onSort(th.dataset.sort));
+      th.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); onSort(th.dataset.sort); }
+      });
     }
   }
   return table;

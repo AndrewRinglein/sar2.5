@@ -289,6 +289,9 @@ async function cached(key, loader, { force = false } = {}) {
    on this project. Nothing in this file reads without paging.
 --------------------------------------------------------------------------- */
 const PAGE = 1000;
+/** How many ids go in one `in (...)` filter; 100 uuids is about 3.7 KB of URL. */
+const ID_CHUNK = 100;
+export const NOTIFICATION_LIMIT = 500;
 
 async function all(build) {
   const out = [];
@@ -324,7 +327,8 @@ export async function getMetricDefinitions({ force } = {}) {
     .select('id, key, canonical_key, display_name, display_order, metric_type, data_type, aggregation, is_computed, formula, is_active')
     .eq('customer_id', CUSTOMER_ID)
     .eq('is_active', true)
-    .order('display_order')), { force });
+    .order('display_order')
+    .order('id')), { force });
 }
 
 /** Product categories, with their per-tenant colours. */
@@ -335,13 +339,15 @@ export async function getProductCategories({ force } = {}) {
       .select('id, key, display_name, display_order, color_bg_from, color_bg_to, color_border, color_text, color_text_dark, show_rpa, show_margin')
       .eq('customer_id', CUSTOMER_ID)
       .eq('is_active', true)
-      .order('display_order'));
+      .order('display_order')
+      .order('id'));
 
     const links = cats.length
       ? await all(() => supabase
           .from('analytics_product_category_metrics')
           .select('category_id, metric_key, role')
-          .in('category_id', cats.map((c) => c.id)))
+          .in('category_id', cats.map((c) => c.id))
+          .order('id'))
       : [];
 
     // role is 'revenue' or 'payout' — the sign convention lives here, once.
@@ -367,7 +373,8 @@ export async function getRunners({ force } = {}) {
       .select('id, name, is_active, staff_id')
       .eq('customer_id', CUSTOMER_ID)
       .eq('is_active', true)
-      .order('name'));
+      .order('name')
+      .order('id'));
 
     const events = await all(() => supabase
       .from('flash_runner_events')
@@ -375,7 +382,8 @@ export async function getRunners({ force } = {}) {
             + 'is_flash_desk, tickets_checked_out, tickets_sold, tickets_returned, '
             + 'tickets_unsold, cash_returned, credit_cards, revenue, restock_count')
       .eq('customer_id', CUSTOMER_ID)
-      .order('event_date', { ascending: false }));
+      .order('event_date', { ascending: false })
+      .order('id'));
 
     const activeIds = new Set(runners.map((r) => r.id));
     return {
@@ -393,7 +401,8 @@ export async function getPromotions({ force } = {}) {
     .from('promotions')
     .select('id, code, name, description, promo_type, discount_type, discount_value, '
           + 'valid_from, valid_to, max_uses, current_uses, is_active')
-    .eq('customer_id', CUSTOMER_ID)), { force });
+    .eq('customer_id', CUSTOMER_ID)
+    .order('id')), { force });
 }
 
 /**
@@ -406,7 +415,9 @@ export async function getMonthlySummary({ force } = {}) {
   return cached('monthly-summary', () => all(() => supabase
     .from('analytics_monthly_summary')
     .select('location_id, month, event_count, total_sales, net_sales, total_attendance')
-    .eq('customer_id', CUSTOMER_ID)), { force });
+    .eq('customer_id', CUSTOMER_ID)
+    .order('location_id')
+    .order('month')), { force });
 }
 
 /**
@@ -417,18 +428,28 @@ export async function getMonthlySummary({ force } = {}) {
  */
 export async function getNotifications({ force } = {}) {
   return cached('notifications', async () => {
-    const notifications = await all(() => supabase
+    // The newest NOTIFICATION_LIMIT, in one page. (Going through all() would
+    // let its paging range override the limit and read every row.)
+    const { data, error } = await supabase
       .from('notifications')
       .select('id, event_type, severity, title, body, entity_type, entity_id, created_at')
       .eq('customer_id', CUSTOMER_ID)
       .order('created_at', { ascending: false })
-      .limit(500));
-    const reads = notifications.length
-      ? await all(() => supabase
-          .from('notification_reads')
-          .select('user_id, notification_id, read_at, archived_at')
-          .in('notification_id', notifications.map((n) => n.id)))
-      : [];
+      .order('id')
+      .range(0, NOTIFICATION_LIMIT - 1);
+    if (error) throw error;
+    const notifications = data ?? [];
+    // Read state in chunks so the `in` list never outgrows a URL.
+    const ids = notifications.map((n) => n.id);
+    const reads = [];
+    for (let i = 0; i < ids.length; i += ID_CHUNK) {
+      reads.push(...await all(() => supabase
+        .from('notification_reads')
+        .select('user_id, notification_id, read_at, archived_at')
+        .in('notification_id', ids.slice(i, i + ID_CHUNK))
+        .order('notification_id')
+        .order('user_id')));
+    }
     return { notifications, reads };
   }, { force });
 }
@@ -438,7 +459,8 @@ export async function getLocations({ force } = {}) {
     .from('locations')
     .select('id, name, code, settings')
     .eq('customer_id', CUSTOMER_ID)
-    .order('name')), { force });
+    .order('name')
+    .order('id')), { force });
 }
 
 /**
@@ -461,7 +483,8 @@ export async function getEvents({ since = null, force } = {}) {
         .from('analytics_events')
         .select('id, customer_id, location_id, event_date, event_type, day_of_week, attendance, notes, metadata, created_at, updated_at')
         .eq('customer_id', CUSTOMER_ID)
-        .order('event_date', { ascending: false });
+        .order('event_date', { ascending: false })
+        .order('id');
       if (since) q = q.gte('event_date', since);
       return q;
     });
@@ -496,7 +519,8 @@ export async function getEvents({ since = null, force } = {}) {
         chunks.slice(i, i + LIMIT).map((c) => all(() => supabase
           .from('analytics_event_data')
           .select('event_id, metric_id, value')
-          .in('event_id', c))),
+          .in('event_id', c)
+          .order('id'))),
       );
       for (const rows of batches) {
         for (const r of rows) (metrics[r.event_id] ||= {})[r.metric_id] = r.value;

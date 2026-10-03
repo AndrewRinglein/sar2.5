@@ -641,10 +641,16 @@ function rosterPanel(m, params, go, hallName) {
       cols.map((c) => `<td class="${c.cls ?? ''}">${c.cell(r)}</td>`).join('')}</tr>`);
   }
   for (const th of t.querySelectorAll('[data-sort]')) {
-    th.addEventListener('click', () => {
+    const sort = () => {
       const key = th.dataset.sort;
       const nextDesc = key === sortKey ? !desc : !['name', 'role', 'hall'].includes(key);
       go({ sort: key, dir: nextDesc ? 'desc' : 'asc' });
+    };
+    // Reachable and operable by keyboard, not only by mouse.
+    th.tabIndex = 0;
+    th.addEventListener('click', sort);
+    th.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); sort(); }
     });
   }
   const wrap = h('div', 'so-scroll'); wrap.append(t);

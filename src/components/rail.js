@@ -14,7 +14,7 @@
 import { NAV, buildHash } from '../lib/router.js';
 import { esc } from '../lib/fmt.js';
 
-export function renderRail({ active, customerName, onNavigate } = {}) {
+export function renderRail({ active, customerName, userEmail, onNavigate, onSignOut } = {}) {
   const rail = document.createElement('nav');
   rail.className = 'rail';
   rail.setAttribute('aria-label', 'Screens');
@@ -56,6 +56,27 @@ export function renderRail({ active, customerName, onNavigate } = {}) {
       g.append(a);
     }
     rail.append(g);
+  }
+
+  // Who is signed in, and the way out. SAR 1.0 has both; without them a
+  // shared computer stays signed in as whoever used it last.
+  if (onSignOut) {
+    const foot = document.createElement('div');
+    foot.className = 'rail-foot';
+    const who = document.createElement('div');
+    who.className = 'rail-user';
+    who.textContent = userEmail ?? '';
+    const out = document.createElement('button');
+    out.type = 'button';
+    out.className = 'rail-signout';
+    out.textContent = 'Sign out';
+    out.addEventListener('click', async () => {
+      out.disabled = true;
+      out.textContent = 'Signing out…';
+      try { await onSignOut(); } finally { out.disabled = false; out.textContent = 'Sign out'; }
+    });
+    foot.append(who, out);
+    rail.append(foot);
   }
 
   return rail;

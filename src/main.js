@@ -191,6 +191,7 @@ let shellEl = null;
 let railEl = null;
 let inspectorEl = null;
 let contentEl = null;
+let disposeShell = null;
 
 function buildShell(data) {
   shellEl = document.createElement('div');
@@ -198,7 +199,11 @@ function buildShell(data) {
 
   railEl = renderRail({
     customerName: data.config?.name,
+    userEmail: data.userEmail,
     onNavigate: (id) => navigate(id),
+    onSignOut: async () => {
+      await signOut(); // onAuthChange sees the user leave and shows sign-in
+    },
   });
 
   contentEl = document.createElement('main');
@@ -206,8 +211,20 @@ function buildShell(data) {
 
   inspectorEl = renderInspector();
 
-  shellEl.append(railEl, contentEl, inspectorEl);
-  wireInspector(shellEl, inspectorEl);
+  // Saved data stands in when the database cannot be reached. Say so, with
+  // its age, rather than presenting old figures as current.
+  if (data.stale) {
+    const when = new Date(data.at).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+    const banner = document.createElement('div');
+    banner.className = 'stale-banner';
+    banner.setAttribute('role', 'status');
+    banner.textContent = `Showing data saved ${when}: the database could not be reached. Reload to try again.`;
+    // Fixed-position, so it takes no cell in the shell's grid.
+    shellEl.append(railEl, contentEl, inspectorEl, banner);
+  } else {
+    shellEl.append(railEl, contentEl, inspectorEl);
+  }
+  disposeShell = wireInspector(shellEl, inspectorEl);
   return shellEl;
 }
 
@@ -243,6 +260,34 @@ function mountScreen(node) {
   mounted = node;
   contentEl.replaceChildren(node);
   contentEl.scrollTop = 0;
+}
+
+/**
+ * Screens that cannot show anything meaningful until Operations arrives.
+ * They show a loading note instead, and render once it lands. Screens not
+ * listed here render at once; those in OPS_REFRESH re-render when it lands.
+ */
+const OPS_WAIT = new Set(['managers', 'staff-overview', 'commission', 'inventory', 'forecast', 'unit-economics', 'sources']);
+const OPS_REFRESH = new Set(['session']);
+
+/**
+ * Render a screen, containing any error to that screen. One broken screen
+ * (bad data, a bad link parameter) must not take the rail and every other
+ * screen down with it.
+ */
+function safeRender(render, props, screen) {
+  try {
+    return render(props);
+  } catch (err) {
+    console.error(`SAR: ${screen.label} failed to render`, err);
+    const box = document.createElement('div');
+    box.className = 'placeholder';
+    box.innerHTML = `<p class="semi">${esc(screen.label)} could not be shown</p>
+      <p class="dim">${esc(err?.message || String(err))}</p>
+      <p style="margin-top:var(--s-4)"><button type="button" class="btn">Open with default settings</button></p>`;
+    box.querySelector('button').addEventListener('click', () => navigate(screen.id));
+    return box;
+  }
 }
 
 function renderScreen(route, data) {
@@ -286,7 +331,15 @@ function renderScreen(route, data) {
   };
 
   if (BUILT[route.screen]) {
-    mountScreen(BUILT[route.screen](props));
+    if (OPS_WAIT.has(route.screen) && data.opsLoading) {
+      const waiting = document.createElement('div');
+      waiting.className = 'placeholder';
+      waiting.innerHTML = `<p class="semi">Loading operations data…</p>
+        <p class="dim">${esc(screen.label)} needs the scheduler and data validator. It appears as soon as they arrive.</p>`;
+      mountScreen(waiting);
+      return;
+    }
+    mountScreen(safeRender(BUILT[route.screen], props, screen));
     return;
   }
 
@@ -297,7 +350,7 @@ function renderScreen(route, data) {
     mountScreen(waiting);
     LAZY[route.screen]().then((render) => {
       if (currentRoute !== route) return; // the user has moved on
-      mountScreen(render(props));
+      mountScreen(safeRender(render, props, screen));
     }).catch(() => {
       if (currentRoute !== route) return;
       waiting.innerHTML = `<p class="semi">${esc(screen.label)} could not be loaded</p>
@@ -382,44 +435,76 @@ function mount(node) {
   document.getElementById('app').replaceChildren(node);
 }
 
+/** Tear down the previous boot's router and global listeners. */
+let stopRouter = null;
+function teardown() {
+  unmount();
+  try { stopRouter?.(); } catch { /* ignore */ }
+  try { disposeShell?.(); } catch { /* ignore */ }
+  stopRouter = null; disposeShell = null; currentRoute = null;
+}
+
+/** Unwrap a cached read ({ data, stale, at }) or pass a plain value through. */
+const unwrap = (r) => (r && typeof r === 'object' && 'data' in r && 'at' in r ? r.data : r);
+
+/**
+ * Each boot gets a number. A boot that has been overtaken (the user signed
+ * out, or in as someone else, while it was still loading) stops at its next
+ * await instead of mounting a screen over the newer one.
+ */
+let bootSeq = 0;
+
 /* ---------------------------------------------------------------------------
    Entry
 --------------------------------------------------------------------------- */
 export async function boot() {
+  const seq = ++bootSeq;
+  const current = () => seq === bootSeq;
+  teardown();
   mount(shell({ status: 'Loading…' }));
 
   try {
     const data = await bootstrap();
+    if (!current()) return;
     orgName = data.config?.name ?? null;
     // Metric definitions are indexed once, not per screen render: 59 defs
     // rebuilt on every navigation is pure waste.
     data.idx = indexMetrics(data.metricDefs);
 
-    // Operations is loaded automatically through the local server.
-    try { data.promotions = await getPromotions(); }
-    catch { data.promotions = []; }
-
-    // Only the Reconcile view uses it; a failure leaves that view's own notice.
-    try { data.monthlySummary = (await getMonthlySummary()).data; }
-    catch { data.monthlySummary = []; }
-
-    try {
-      const n = await getNotifications();
-      data.notifications = n.notifications;
-      data.notificationReads = n.reads;
-      data.userId = (await whoami())?.id ?? null;
-    } catch {
-      data.notifications = []; data.notificationReads = []; data.userId = null;
-    }
+    // Side reads from the analytics project, together. Each can fail alone.
+    const [promotions, summary, notes, user] = await Promise.allSettled([
+      getPromotions(), getMonthlySummary(), getNotifications(), whoami(),
+    ]);
+    if (!current()) return;
+    data.promotions = promotions.status === 'fulfilled' ? unwrap(promotions.value) ?? [] : [];
+    data.monthlySummary = summary.status === 'fulfilled' ? unwrap(summary.value) ?? [] : [];
+    const n = notes.status === 'fulfilled' ? unwrap(notes.value) : null;
+    data.notifications = n?.notifications ?? [];
+    data.notificationReads = n?.reads ?? [];
+    data.userId = user.status === 'fulfilled' ? user.value?.id ?? null : null;
+    data.userEmail = user.status === 'fulfilled' ? user.value?.email ?? null : null;
     data.version = VERSION;
 
-    await loadManagers(data);
+    // Operations (scheduler + validator) can take a while. The app opens
+    // without it; the screens that need it wait for it on their own.
+    data.opsLoading = true;
+    data.schedule = undefined;
 
     mount(buildShell(data));
-    startRouter((route) => renderScreen(route, data));
-
+    stopRouter = startRouter((route) => renderScreen(route, data));
     window.SAR = Object.freeze({ version: VERSION, customer: CUSTOMER_ID, data });
+
+    await loadManagers(data);
+    if (!current()) return;
+    data.opsLoading = false;
+    const r = currentRoute;
+    if (r && (OPS_WAIT.has(r.screen) || OPS_REFRESH.has(r.screen))) {
+      const top = contentEl.scrollTop;
+      renderScreen(r, data);
+      contentEl.scrollTop = top;
+    }
   } catch (err) {
+    if (!current()) return;
     if (err instanceof NotSignedIn) return mount(signInScreen());
     if (err instanceof NoAccess)    return mount(noAccessScreen(await currentUser()));
     console.error('SAR boot failed', err);
@@ -427,9 +512,23 @@ export async function boot() {
   }
 }
 
-if (typeof document !== 'undefined' && document.getElementById('app')) {
+/**
+ * Boot once per signed-in identity. Supabase announces the session on load,
+ * on every token refresh (including each time the tab regains focus) and on
+ * sign-in/out; only a CHANGE of who is signed in should rebuild the app.
+ */
+let bootedFor; // undefined until the first boot; null means signed out
+export function bootFor(userId) {
+  if (userId === bootedFor) return false;
+  bootedFor = userId;
   boot();
+  return true;
+}
+
+if (typeof document !== 'undefined' && document.getElementById('app')) {
   // Re-boot on sign-in/out so the OAuth round trip lands on the real app
-  // rather than leaving the sign-in screen up behind a valid session.
-  onAuthChange(() => boot());
+  // rather than leaving the sign-in screen up behind a valid session — but
+  // only when the user actually changes (see bootFor).
+  onAuthChange((user) => bootFor(user?.id ?? null));
+  currentUser().then((u) => bootFor(u?.id ?? null), () => bootFor(null));
 }

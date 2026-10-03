@@ -48,7 +48,8 @@ export function renderVenues({ data, params, onNavigate, setInspectorContent }) 
     return root;
   }
 
-  const days = Number(params.days) || 90;
+  // Only the offered spans: a hand-typed ?days=1e309 must not reach date maths.
+  const days = [30, 90, 365].includes(Number(params.days)) ? Number(params.days) : 90;
   const bar = h('div', 'filter-bar');
   for (const d of [30, 90, 365]) {
     const b = h('button', `chip${d === days ? ' is-active' : ''}`);

@@ -3,10 +3,10 @@
   "version": "2.0.0",
   "private": true,
   "type": "module",
-  "description": "SAR — Session Analysis Reporting. Read-only analytics for Vanguard Music & Performing Arts.",
+  "description": "SAR \u2014 Session Analysis Reporting. Read-only analytics for Vanguard Music & Performing Arts.",
   "scripts": {
     "dev": "vite",
-    "build": "npm run lint:tokens && npm test && vite build",
+    "build": "npm run lint:tokens && npm test && npm run test:future && vite build",
     "preview": "vite preview",
     "lint:tokens": "node scripts/lint-tokens.mjs",
     "test": "node --test test/*.test.mjs",
@@ -14,7 +14,8 @@
     "configure:local": "node scripts/configure-local.mjs",
     "diagnose:local": "node scripts/diagnose-local.mjs",
     "preview:scout": "node scripts/preview-scout.mjs",
-    "build:edge": "node scripts/build-edge.mjs"
+    "build:edge": "node scripts/build-edge.mjs",
+    "test:future": "node --import ./scripts/fake-date.mjs --test test/*.test.mjs"
   },
   "devDependencies": {
     "esbuild": "0.21.5",
@@ -25,5 +26,8 @@
     "@supabase/supabase-js": "^2.112.3",
     "leaflet": "1.9.4",
     "pg": "^8.23.0"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

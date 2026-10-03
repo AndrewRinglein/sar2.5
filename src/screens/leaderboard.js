@@ -150,8 +150,12 @@ export function renderLeaderboard({ data, params, onNavigate, setInspectorConten
   root.append(bar);
 
   /* ---- rows ---- */
-  const cutoff = period.days
-    ? new Date(Date.now() - period.days * 86400000).toISOString().slice(0, 10)
+  // Counted back from the latest session on record, not the wall clock, so a
+  // period always means the same sessions for the same data (and the tests
+  // do not start failing as the calendar moves on).
+  const latest = data.events.reduce((m, e) => (e.event_date > m ? e.event_date : m), '');
+  const cutoff = period.days && latest
+    ? new Date(Date.parse(`${latest}T00:00:00Z`) - period.days * 86400000).toISOString().slice(0, 10)
     : null;
 
   const rows = data.events
