@@ -991,3 +991,28 @@ Validator data, and safe rendering of unknown hall names. Build and 681 tests
 pass. Local server restarted on 127.0.0.1:5173. Browser verification was blocked
 by the browser URL policy when binding the existing unreachable-page tab;
 this new view has not yet been verified against live data in the browser.
+
+## 2026-10-02 — Side by side with SAR 1.0 (v2.5.24), live data
+
+Both apps open on the same data in the owner's browser, same filters.
+
+| Screen | Check | SAR 1.0 | SAR 2.0 | Verdict |
+|---|---|---|---|---|
+| Session | RWC Thu 1 Oct: net, gross, payouts, margin, attendance, RPA | $15,898 / $86,384 / $70,486 / 18.4% / 79%·158 / $547 | identical | match |
+| Session | changes vs 3M Thursday pool (11 sessions) | net −16.8%, RPA +13.1%, margin −3.5pp | identical | match |
+| Session | Flash payouts vs pool | +11.6% | +12.6% | SAR 1.0's category cards take the pool's `flash_payout_unclaimed` as positive while its own session total keeps it negative; SAR 2.0 is signed throughout. Not changed. |
+| Session | Hotball / Mega: balance, max, since hit, last, participation | $3,140 · $19,365 · 3 · $2,225 · 147 (93%); $2,740 · $64,030 · 1 · $21,020 · 145 (92%) | identical | match |
+| Reporting | SC, every month Sep 2024 – Sep 2026: sessions, sales, payouts, net, mix, margin, RPA, profit/session, attendance and every change | — | identical | match |
+| Reporting | October projection, SC | 0 + 27 · $4,370,385 (+11.8%) · net $1,221,113 | 0 + 27 · $4,386,155 (+12.2%) · net $1,223,608 | **added**; values within 0.4% (SAR 1.0 uses a 90-day average per slot, SAR 2.0 the Forecast's 13-week slot model) |
+| Dashboard | 12 months combined, gross and net labels | $4.7M … $4.9M, $86k / $1.2M … $1.2M | identical | match |
+| Dashboard | October projected point | $5.4M / $1.4M | $5.5M / $1.4M | **added** |
+| Leaderboard | RWC, all time, Thursdays, by RPA | pool 104; 15 Jan $624 · 27 Aug $590 · 9 Oct $589 · 8 Jan $567 | identical | **Days filter added** to match; rows now show the year |
+| Compare | SC, cohort A 3 Jul–3 Oct | 77 sessions; $163,655.54, $46,103.50, $117,552.04, 26.9%, $537.65, 303 | identical | match |
+| Compare | cohort B | 74 sessions | 73 | deliberate: SAR 1.0 puts the boundary day (3 Jul) in both cohorts |
+| Runners | 5 Jul–3 Oct, all locations, floor | Malaya 28 · 257,524 · $213,017 … Emma 16 · $84,368 | identical with the same dates | match; SAR 2.0's default window ends at the latest session (1 Oct), SAR 1.0's at today (3 Oct) — deliberate, documented in runners.js |
+| Notifications | read state | latest 50, all unread | latest 500 (399 exist), all unread | match. Before today's fix SAR 2.0 showed none at all. |
+
+Numbers fixed today and why: see the commit "Fix wrong numbers" (breaks per
+workday, session prediction range: 81% → 93% measured coverage on 762 live
+nights, per-session staff hours, org-wide jackpot hits, YoY partial month,
+Pacific dates).

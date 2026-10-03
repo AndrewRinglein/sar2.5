@@ -109,6 +109,45 @@ function card(aspect, value, active) {
   return c;
 }
 
+/* ---------------------------------------------------------------------------
+   Day slots — SAR 1.0's "Days" filter (Mon … Sat Early, Sat Late …)
+--------------------------------------------------------------------------- */
+
+const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const slotOf = (e) => `${new Date(`${e.event_date}T00:00:00Z`).getUTCDay()}-${e.event_type}`;
+
+/**
+ * Every weekday-and-type slot present in the sessions, Monday first. A day
+ * with one type is just "Thu"; a day with two is "Sat Early" and "Sat Late",
+ * as SAR 1.0 labels them.
+ */
+export function daySlots(events = []) {
+  const types = new Map();
+  for (const e of events) {
+    const d = new Date(`${e.event_date}T00:00:00Z`).getUTCDay();
+    types.set(d, new Set([...(types.get(d) ?? []), e.event_type]));
+  }
+  const out = [];
+  for (const d of [1, 2, 3, 4, 5, 6, 0]) {
+    const ts = [...(types.get(d) ?? [])].sort((a, b) => (a === 'late') - (b === 'late') || a.localeCompare(b));
+    for (const t of ts) {
+      const label = ts.length === 1 ? DOW[d] : `${DOW[d]} ${t === 'late' ? 'Late' : 'Early'}`;
+      out.push({ key: `${d}-${t}`, label });
+    }
+  }
+  return out;
+}
+
+/** The slots a `days` parameter selects; absent or empty means every slot. */
+export function selectedSlots(param, slots) {
+  if (param === undefined || param === null || param === '') return new Set(slots.map((s) => s.key));
+  if (param === 'none') return new Set();
+  const known = new Set(slots.map((s) => s.key));
+  const picked = new Set(String(param).split(',').filter((k) => known.has(k)));
+  // A pick that names no slot this hall has (switching halls) means all.
+  return picked.size ? picked : new Set(known);
+}
+
 export function renderLeaderboard({ data, params, onNavigate, setInspectorContent }) {
   const aspects = aspectsFor(data.categories);
   const aspect = aspects.find((a) => a.key === params.aspect)
@@ -149,6 +188,33 @@ export function renderLeaderboard({ data, params, onNavigate, setInspectorConten
   bar.append(dirBtn);
   root.append(bar);
 
+  /* ---- days: which weekday-and-type slots are in the pool ---- */
+  const slots = daySlots(data.events.filter((e) => hall === 'all' || e.location_id === hall));
+  const picked = selectedSlots(params.days, slots);
+  const daysParam = (set) => (set.size === slots.length ? undefined
+    : set.size === 0 ? 'none' : slots.filter((x) => set.has(x.key)).map((x) => x.key).join(','));
+  const go = (set) => onNavigate('leaderboard', { ...params, hall, aspect: aspect.key,
+    period: period.key, dir: descending ? 'desc' : 'asc', days: daysParam(set) });
+  const dayBar = h('div', 'filter-bar lb-days');
+  dayBar.append(h('span', 'dim', 'Days'));
+  const all = h('button', 'chip'); all.type = 'button'; all.textContent = 'All';
+  all.addEventListener('click', () => go(new Set(slots.map((x) => x.key))));
+  const none = h('button', 'chip'); none.type = 'button'; none.textContent = 'None';
+  none.addEventListener('click', () => go(new Set()));
+  dayBar.append(all, none, h('span', 'filter-sep'));
+  for (const sl of slots) {
+    const b = h('button', `chip${picked.has(sl.key) ? ' is-active' : ''}`);
+    b.type = 'button'; b.textContent = sl.label;
+    b.setAttribute('aria-pressed', String(picked.has(sl.key)));
+    b.addEventListener('click', () => {
+      const next = new Set(picked);
+      if (next.has(sl.key)) next.delete(sl.key); else next.add(sl.key);
+      go(next);
+    });
+    dayBar.append(b);
+  }
+  root.append(dayBar);
+
   /* ---- rows ---- */
   // Counted back from the latest session on record, not the wall clock, so a
   // period always means the same sessions for the same data (and the tests
@@ -161,16 +227,19 @@ export function renderLeaderboard({ data, params, onNavigate, setInspectorConten
   const rows = data.events
     .filter((e) => (hall === 'all' || e.location_id === hall))
     .filter((e) => (!cutoff || e.event_date >= cutoff))
+    .filter((e) => picked.has(slotOf(e)))
     .map((e) => ({
       event: e,
       totals: sessionTotals(metricsFor(e.id, data.metrics, data.idx), data.categories),
     }));
 
   const sorted = sortRows(rows, aspect, descending);
+  dayBar.append(h('span', 'lb-pool dim', `Pool: ${rows.length.toLocaleString()} session${rows.length === 1 ? '' : 's'}`));
 
   if (!sorted.length) {
     root.append(h('div', 'placeholder',
-      `<p class="semi">No sessions in this period</p><p class="dim">${esc(period.label)}.</p>`));
+      `<p class="semi">No sessions in this period</p><p class="dim">${esc(period.label)}${
+        picked.size < slots.length ? ', on the days picked' : ''}.</p>`));
     return root;
   }
 
@@ -187,7 +256,7 @@ export function renderLeaderboard({ data, params, onNavigate, setInspectorConten
     name.title = 'Open this session';
     name.innerHTML = `<span class="lb-hall">${esc(hallName)}</span>
       <span class="dim">${weekday(r.event.event_date).slice(0, 3)}
-      ${dateShort(r.event.event_date)} · ${esc(sessionType(r.event.event_type))}</span>`;
+      ${dateShort(r.event.event_date)} ${r.event.event_date.slice(0, 4)} · ${esc(sessionType(r.event.event_type))}</span>`;
     name.addEventListener('click', () => onNavigate('session', { id: r.event.id }));
 
     const cards = h('div', 'lb-cards');

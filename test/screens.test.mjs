@@ -2365,3 +2365,14 @@ test('FIX: dashboard legends toggle series and remember it in the hash', async (
   const { node: n2 } = render(DB.renderDashboard, d, { chart: 'product', hide: nav.at(-1).hide });
   assert.ok(n2.querySelector('.ch-legend .ch-key.is-off'), 'the hidden key renders as off');
 });
+
+test('leaderboard days filter: slots, labels and selection', async () => {
+  const { daySlots, selectedSlots } = await import('../src/screens/leaderboard.js');
+  const ev = (date, type) => ({ event_date: date, event_type: type });
+  const slots = daySlots([ev('2026-09-24', 'regular'), ev('2026-09-26', 'regular'), ev('2026-09-26', 'late'), ev('2026-09-27', 'regular')]);
+  assert.deepEqual(slots.map((s) => s.label), ['Thu', 'Sat Early', 'Sat Late', 'Sun']);
+  assert.equal(selectedSlots(undefined, slots).size, 4);
+  assert.deepEqual([...selectedSlots('4-regular', slots)], ['4-regular']);
+  assert.equal(selectedSlots('none', slots).size, 0);
+  assert.equal(selectedSlots('2-regular', slots).size, 4, 'a slot this hall lacks falls back to all');
+});

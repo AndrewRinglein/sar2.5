@@ -27,6 +27,7 @@ import {
 } from '../lib/model.js';
 import { usd, usdShort, pct, int, pctDelta, esc, DASH, hallToday } from '../lib/fmt.js';
 import { play } from '../lib/sound.js';
+import { monthProjection } from './reporting.js';
 
 const h = (tag, cls, html) => {
   const el = document.createElement(tag);
@@ -56,7 +57,7 @@ const SERIES = {
    1 — Twelve Months Revenue. DESIGN §4.1
 --------------------------------------------------------------------------- */
 
-export function twelveMonths(rows, { labels = true } = {}) {
+export function twelveMonths(rows, { labels = true, projection = null } = {}) {
   const win = lastMonths(rows, MONTHS_BACK);
   const f = frame();
   const svg = svgEl('svg', { viewBox: `0 0 ${f.width} ${f.height}`, class: 'ch' });
@@ -92,6 +93,27 @@ export function twelveMonths(rows, { labels = true } = {}) {
         svg.append(t);
       }
     });
+  }
+
+  // The month in progress, finished out (SAR 1.0's "Projected"): a hollow
+  // dot at the projected total over the partial month, joined by a dashed
+  // line so it is never read as recorded.
+  const last = win.length - 1;
+  if (projection && win[last]?.key === projection.key) {
+    for (const [key, cls] of [['gross', 'gross'], ['net', 'net']]) {
+      const v = projection.total[key === 'gross' ? 'gross' : 'net'];
+      const from = at(win[last], last, key);
+      const to = { x: from.x, y: f.top + y(Math.max(0, v)) };
+      svg.append(svgEl('line', { x1: from.x, y1: from.y, x2: to.x, y2: to.y,
+        class: `ch-line ch-${cls}`, 'stroke-dasharray': '3 3' }));
+      svg.append(withTitle(svgEl('circle', { cx: to.x, cy: to.y, r: 4, class: `ch-dot ch-${cls} ch-projected` }),
+        `${monthFull(projection.key)} ${key}, projected: ${usd(v)} (${projection.actual.sessions} recorded + ${projection.projected.sessions} expected)`));
+      if (labels) {
+        const t = svgEl('text', { x: to.x + 6, y: to.y + 4, class: 'ch-label data-label', 'text-anchor': 'start' });
+        t.textContent = money(v);
+        svg.append(t);
+      }
+    }
   }
   return { svg, win, empty: false };
 }
@@ -555,13 +577,19 @@ export function renderDashboard({ data, params, onNavigate, setInspectorContent 
   let note = '';
 
   if (chart === '12months') {
-    const r = twelveMonths(rows, { labels });
+    let projection = null;
+    try {
+      projection = monthProjection(data, { hall: hall === 'combined' ? 'all' : hall });
+      if (projection && !(projection.projected.sessions > 0)) projection = null;
+    } catch { projection = null; }
+    const r = twelveMonths(rows, { labels, projection });
     if (r.empty) empty('No monthly data yet'); else panel.append(r.svg);
     panel.append(legend([
       { key: 'g', label: 'Gross', colour: SERIES.gross },
       { key: 'n', label: 'Net', colour: SERIES.net },
     ]));
-    note = `${r.win.length} months, oldest first.`;
+    note = `${r.win.length} months, oldest first.${projection
+      ? ` Hollow dots: ${monthFull(projection.key)} finished out — ${projection.actual.sessions} recorded + ${projection.projected.sessions} expected sessions, valued as on the Forecast screen.` : ''}`;
   } else if (chart === 'yoy') {
     const r = yearOverYear(rows, { labels });
     if (r.empty) {

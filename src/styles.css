@@ -845,6 +845,9 @@ rect.ch-bar.ch-gross { fill: var(--series-1); }
 .ch-net, .ch-line.ch-net { stroke: var(--series-2); }
 path.ch-area.ch-net { fill: var(--series-2); stroke: none; }
 circle.ch-dot.ch-net { fill: var(--series-2); }
+circle.ch-dot.ch-projected { fill: var(--surface); stroke-width: 2; }
+circle.ch-projected.ch-gross { stroke: var(--series-1); }
+circle.ch-projected.ch-net { stroke: var(--series-2); }
 rect.ch-bar.ch-net { fill: var(--series-2); }
 rect.ch-bar.ch-prior-gross { fill: var(--series-3); }
 rect.ch-bar.ch-prior-net { fill: var(--series-5); }
