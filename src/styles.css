@@ -585,6 +585,10 @@ button.link:hover { text-decoration: underline; background: none; border-color: 
 }
 /* A period still running is marked, so its totals are never mistaken for final. */
 .rp-col.is-partial { border-style: dashed; }
+/* The projection column: an estimate, styled apart from recorded months. */
+.rp-col.is-projection { border-style: dashed; border-color: var(--accent); }
+.rp-col.is-projection .rp-detail { display: block; }
+.rp-proj-note { font-size: var(--t-xs); padding: var(--s-2) var(--s-3); }
 
 .rp-head { padding: var(--s-3); background: var(--surface-2); border-bottom: 1px solid var(--hair); }
 .rp-month { font-size: var(--t-base); font-weight: 500; }

@@ -21,6 +21,12 @@
 
 import { metricsFor, sessionTotals, getMetric, maxAttendanceFor } from '../lib/model.js';
 import { usd, usd2, pct, int, monthLabel, esc, DASH, hallToday } from '../lib/fmt.js';
+import {
+  sessionRows, prepare, buildForecast, rosterSessions, hallMapFromLocations,
+  resolveOwnerClosures, monthStartDay, monthEndDay,
+} from '../lib/forecast-model.js';
+import { dayNumber } from '../lib/managers.js';
+import { OWNER_CLOSURES } from '../lib/config.js';
 import { play } from '../lib/sound.js';
 
 const h = (tag, cls, html) => {
@@ -354,6 +360,72 @@ function periodColumn(p, changes, expanded, onToggle) {
    Screen
 --------------------------------------------------------------------------- */
 
+/* ---------------------------------------------------------------------------
+   Month projection — SAR 1.0's last column
+--------------------------------------------------------------------------- */
+
+/**
+ * The month in progress, finished out: what is recorded so far plus every
+ * session still expected, each valued by the Forecast screen's model (its own
+ * slot's recent average, holidays and owner closures, the roster where the
+ * scheduler has one). SAR 1.0 values the missing nights at a 90-day average
+ * per weekday and type; this is the same idea with the Forecast's evidence,
+ * so the two screens never disagree about the same month.
+ */
+export function monthProjection(data, { hall = 'all', today = hallToday() } = {}) {
+  const month = today.slice(0, 7);
+  const todayDay = dayNumber(today);
+  const rows = sessionRows(data.events ?? [], data).filter((r) => r.day <= todayDay);
+  if (!rows.length) return null;
+  const prep = prepare(rows, { today: todayDay });
+  const sched = data.schedule;
+  const roster = rosterSessions(sched?.ok ? sched.sessions ?? [] : [], {
+    hallMap: hallMapFromLocations(data.locations ?? []).map,
+    fromDay: monthStartDay(month), toDay: monthEndDay(month), rows, cutoff: prep.cutoff,
+  });
+  const f = buildForecast({
+    rows, prep, months: [month], roster: roster.sessions, hall,
+    ownerClosed: resolveOwnerClosures(OWNER_CLOSURES, data.locations ?? []).map,
+  });
+  const m = f.months[0];
+  if (!m) return null;
+  return {
+    key: month, label: monthLabel(month),
+    actual: m.actual, projected: m.projected, total: m.total,
+    unprojectable: f.unprojectable.length, closed: f.closed.length,
+  };
+}
+
+function projectionColumn(pr, previous, onForecast) {
+  const col = h('div', 'rp-col is-projection');
+  col.append(h('div', 'rp-head', `
+    <div class="rp-month">${esc(pr.label)} projection</div>
+    <div class="rp-count">${int(pr.actual.sessions)} recorded + ${int(pr.projected.sessions)} expected</div>`));
+  const prev = previous?.metrics ?? null;
+  const box = (label, tone, total, actual, prevValue) => {
+    const ch = percentChange(total, prevValue);
+    const b = h('div', `rp-box rp-${tone}`);
+    b.innerHTML = `<div class="rp-box-label">${esc(label)}</div>
+      <div class="rp-box-value">${usd(total)}</div>
+      ${changeTag(ch) ?? ''}
+      <div class="rp-detail"><div class="dim">Recorded ${usd(actual)} · to come ${usd(total - actual)}</div></div>`;
+    return b;
+  };
+  col.append(box('Total sales', 'sales', pr.total.gross, pr.actual.gross, prev?.totalSales));
+  col.append(box('Total payouts', 'payouts', pr.total.payout, pr.actual.payout, prev?.totalPayouts));
+  col.append(box('Net sales', 'net', pr.total.net, pr.actual.net, prev?.netSales));
+  const notes = [];
+  if (pr.unprojectable) notes.push(`${int(pr.unprojectable)} expected session${pr.unprojectable === 1 ? ' has' : 's have'} too little history to value and ${pr.unprojectable === 1 ? 'is' : 'are'} left out`);
+  if (pr.closed) notes.push(`${int(pr.closed)} expected closed for a holiday`);
+  const foot = h('p', 'dim rp-proj-note', `${notes.length ? `${esc(notes.join('; '))}. ` : ''}Valued as on the Forecast screen. `);
+  const link = h('button', 'link', 'Open the forecast');
+  link.type = 'button';
+  link.addEventListener('click', onForecast);
+  foot.append(link);
+  col.append(foot);
+  return col;
+}
+
 /** Expanded boxes persist across re-renders within a visit. */
 const expanded = new Set();
 
@@ -394,16 +466,31 @@ export function renderReporting({ data, params, onNavigate, setInspectorContent 
 
   // Start at the most recent, matching SAR 1.0: the last four columns with two
   // more visible to their left.
-  let offset = Math.max(0, periods.length - MONTHS_PER_VIEW - 2);
+  const columnCount = periods.length + (mode === 'monthly' ? 1 : 0);
+  let offset = Math.max(0, columnCount - MONTHS_PER_VIEW - 2);
+
+  // SAR 1.0's "Month Projection": the current month finished out. Monthly
+  // view only; compared against the last COMPLETE month.
+  let projection = null;
+  if (mode === 'monthly') {
+    try { projection = monthProjection(data, { hall }); } catch { projection = null; }
+    if (projection && !(projection.projected.sessions > 0)) projection = null;
+  }
+  const lastComplete = [...periods].reverse().find((p) => !p.inProgress) ?? null;
 
   const paint = () => {
-    strip.replaceChildren(...periods.map((p, i) =>
+    const cols = periods.map((p, i) =>
       periodColumn(p, changesFor(p, periods[i - 1] ?? null), expanded, (key) => {
         // Toggling re-renders only this column, so the strip does not jump.
         if (expanded.has(key)) expanded.delete(key); else expanded.add(key);
         play('expand');
         paint();
-      })));
+      }));
+    if (projection) {
+      cols.push(projectionColumn(projection, lastComplete,
+        () => onNavigate('forecast', { hall: hall === 'all' ? undefined : hall, horizon: 'month' })));
+    }
+    strip.replaceChildren(...cols);
     strip.style.transform = `translateX(${-offset * COLUMN_STEP}px)`;
   };
 
@@ -413,7 +500,7 @@ export function renderReporting({ data, params, onNavigate, setInspectorContent 
     // Matching it, or the newest months cannot be brought fully into view.
     // Its LEFT bound of -2 is deliberately not copied: that scrolls into empty
     // space beside the oldest column, which is a defect, not a feature.
-    const max = Math.max(0, periods.length - 2);
+    const max = Math.max(0, strip.children.length - 2);
     offset = Math.min(max, Math.max(0, offset + dir));
     strip.style.transform = `translateX(${-offset * COLUMN_STEP}px)`;
     play('scroll');

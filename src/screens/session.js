@@ -554,7 +554,7 @@ function renderBand(ev, ctx) {
   panel.append(h('p', 'sd-foot dim', me.lo === null
     ? `This session has only ${me.n} earlier sessions on its slot — too few for a range.`
     : `This session: ${usd(me.value)} against an expected ${usd(me.expected)} (range ${usd(me.lo)} to ${usd(me.hi)}) — <b>${me.inside ? 'inside' : 'outside'}</b> the range.
-       The band is the 2.5th–97.5th percentile of the 12 sessions before each point; a point with fewer than ${MIN_POOL} has none.`));
+       The band is where 95 of 100 nights should land, judged from the 12 sessions before each point (their average ± the spread a single night shows); a point with fewer than ${MIN_POOL} has none.`));
   return panel;
 }
 
