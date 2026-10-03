@@ -36,5 +36,5 @@ export default defineConfig(({ mode }) => ({
   // Content-Security-Policy as a <meta> tag, BUILD ONLY (GitHub Pages cannot
   // send headers; the dev server's HMR needs what the policy forbids).
   cspPlugin()],
-  build: { outDir: 'dist', emptyOutDir: true, sourcemap: true },
+  build: { outDir: 'dist', emptyOutDir: true, sourcemap: false },
 }));

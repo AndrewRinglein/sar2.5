@@ -27,7 +27,7 @@
       so implausible rows are flagged and excluded from totals by default.
    ========================================================================== */
 
-import { usd, usd2, pct, int, dateShort, esc, DASH } from '../lib/fmt.js';
+import { usd, usd2, pct, int, dateShort, esc, DASH, dollarsToCents } from '../lib/fmt.js';
 import { play } from '../lib/sound.js';
 import { commissionPool } from '../lib/model.js';
 
@@ -43,12 +43,8 @@ export const TABS = [
   { id: 'people', label: 'By person' },
 ];
 
-/** Dollars (numeric in Ops) to cents. Ops stores money as numeric dollars. */
-export const toCents = (v) => {
-  if (v === null || v === undefined || v === '') return null;
-  const n = Number(v);
-  return Number.isFinite(n) ? Math.round(n * 100) : null;
-};
+/** Dollars (numeric in Ops) to cents — the one shared conversion, in fmt.js. */
+export const toCents = dollarsToCents;
 
 /* ---------------------------------------------------------------------------
    Plausibility

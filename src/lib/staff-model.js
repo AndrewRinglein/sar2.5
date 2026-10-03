@@ -23,6 +23,8 @@
    and `otAdj` are derived from commission and hours only.
    ========================================================================== */
 
+import { dollarsToCents } from './fmt.js';
+
 /** SPEC §22.1.4 — confirmed. The scheduler's own constant is 0 (Sunday). */
 export const WORKWEEK_START_DOW = 1;
 
@@ -494,7 +496,7 @@ export function wageLine({ commission = null, hours = null, ot1_5 = 0, ot2_0 = 0
    The whole screen's model
 --------------------------------------------------------------------------- */
 
-const toCents = (v) => { const n = num(v); return n === null ? null : Math.round(n * 100); };
+const toCents = dollarsToCents;
 const nameOf = (p) => p?.name ?? p?.first_name ?? 'Unknown';
 
 /**

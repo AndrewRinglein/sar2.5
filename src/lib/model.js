@@ -509,7 +509,7 @@ export function jackpotParticipation(m, jp, attendance) {
  * `rpa` is GROSS sales per attendee. Floored at zero: a session below target
  * pays nothing, it does not claw back.
  *
- * `targetRpa` comes from `sched_rpa_defaults` in Ops — see join.rpaPartFor(),
+ * `targetRpa` comes from `sched_rpa_defaults` in Ops — see commission.js targetFor(),
  * and note Redwood City files its targets under 'PM' despite a blank part.
  */
 export function commissionPool({ rpa, targetRpa, attendance, rate }) {

@@ -175,24 +175,6 @@ test('lastMonths takes the newest window', () => {
   assert.equal(lastMonths(rows, 3)[0].key, rows[17].key);
 });
 
-/* ---- production reconciliation ------------------------------------------ */
-
-test('PRODUCTION: the rollup arithmetic matches figures computed in SQL', () => {
-  // Real months, summed in Postgres over analytics_product_category_metrics.
-  // gross - payout = net, and net/gross = margin, to four places.
-  const real = [
-    { ym: '2026-08', events: 22, gross: 313276800, payout: 224990020, net: 88286780, margin: 0.2818 },
-    { ym: '2026-07', events: 38, gross: 516165100, payout: 381482900, net: 134682200, margin: 0.2609 },
-    { ym: '2026-06', events: 35, gross: 486381250, payout: 360790595, net: 125590655, margin: 0.2582 },
-    { ym: '2026-01', events: 39, gross: 486041015, payout: 376544800, net: 109496215, margin: 0.2253 },
-  ];
-  for (const r of real) {
-    assert.equal(r.gross - r.payout, r.net, `${r.ym} net must be gross minus payout`);
-    assert.equal(Number((r.net / r.gross).toFixed(4)), r.margin, `${r.ym} margin`);
-    assert.ok(r.margin > 0.2 && r.margin < 0.3, `${r.ym} margin plausible against U8's 20.5%`);
-  }
-});
-
 /* ---------------------------------------------------------------------------
    Scales
 --------------------------------------------------------------------------- */

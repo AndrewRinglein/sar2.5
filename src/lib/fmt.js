@@ -174,3 +174,14 @@ export function hallToday(now = new Date(), timeZone = HALL_TIME_ZONE) {
   } catch { /* unknown zone: UTC below */ }
   return now.toISOString().slice(0, 10);
 }
+
+/**
+ * Dollars (Ops stores money as numeric dollars) to integer cents, or null.
+ * `Number(null)` is 0, so missing must be caught before converting: a blank
+ * amount is unknown, never $0.
+ */
+export function dollarsToCents(v) {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.round(n * 100) : null;
+}
