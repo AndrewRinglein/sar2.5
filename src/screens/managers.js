@@ -4,11 +4,12 @@
    Performance by the person who ran the night, normalized so a Friday is
    judged against Fridays. Built against SAR2-MANAGERS-DESIGN.md.
 
-   Three tabs:
+   Four tabs:
 
      Overview    one block per role, one row per person, ranked when it can be
      Person      one person, every session, and the SHAPE OF THEIR ROSTER
      Day shape   the normalization itself, made inspectable
+     Coverage    crew sources, missing roles and sessions that cannot be matched
 
    WHY THE SCORE IS A Z AND NOT A PERCENTAGE. Measured on production: the
    within-slot coefficient of variation runs 0.144 on Saturday-late to 0.237 on
@@ -38,6 +39,7 @@ import {
 import { usd, usd2, pct, int, dateShort, weekday, sessionType, esc, DASH } from '../lib/fmt.js';
 import { play } from '../lib/sound.js';
 import { nameMergePanel } from '../components/name-merge.js';
+import { validatorClosureLabel } from '../lib/crew-model.js';
 
 const h = (tag, cls, html) => {
   const el = document.createElement(tag);
@@ -50,6 +52,7 @@ const TABS = [
   { id: 'overview', label: 'Overview' },
   { id: 'person', label: 'Person' },
   { id: 'dayshape', label: 'Day shape' },
+  { id: 'coverage', label: 'Coverage' },
 ];
 
 const ROLES = ['MOD', 'Paymaster', 'Flash Manager'];
@@ -539,7 +542,7 @@ function dayshape(model, data) {
 
 /** Where a session's crew came from, in a word or two. */
 function crewFrom(s) {
-  if (s.source === 'validator') return s.approved ? 'validator' : 'validator, not yet approved';
+  if (s.source === 'validator') return `${s.approved ? 'validator' : 'validator, not yet approved'} · ${validatorClosureLabel(s.sessionStatus)}`;
   return s.source === 'scheduler' ? 'scheduler' : DASH;
 }
 
@@ -564,6 +567,86 @@ export function sourcesLine(model) {
     <span class="dim">· ${dateShort(span.start)} ${span.start.slice(0, 4)} – ${dateShort(span.end)} ${span.end.slice(0, 4)}</span>${
     model.validator?.ok ? '' : ' <span class="dim">· validator not connected, so crews are from the scheduler only</span>'}`;
   return el;
+}
+
+/** Explain gaps using the same source decisions and date span as the headline. */
+function coverage(model, params, data, onNavigate) {
+  const wrap = h('div');
+  const span = model.sourceSpan;
+  const all = params.coverage === 'all';
+  const locations = new Map(data.locations.map((l) => [l.id, l.name]));
+  const hallName = (hall) => locations.get(model.hallMap?.get(hall)) ?? hall;
+  const rows = data.events.filter((e) => span && e.event_date >= span.start && e.event_date <= span.end)
+    .map((e) => {
+      const source = model.sourceOf?.get(e.id);
+      const managers = model.crewOf.get(e.id) ?? {};
+      const missing = ROLES.filter((role) => !managers[role]);
+      return { e, source, missing, needsReview: source?.source !== 'validator' || !source.approved || missing.length > 0 };
+    }).sort((a, b) => b.e.event_date.localeCompare(a.e.event_date)
+      || String(a.e.location_id).localeCompare(String(b.e.location_id))
+      || String(a.e.event_type).localeCompare(String(b.e.event_type)));
+  const issues = rows.filter((r) => r.needsReview);
+  const bar = h('div', 'filter-bar');
+  for (const [value, label] of [['gaps', `Needs review (${issues.length})`], ['all', `All sessions (${rows.length})`]]) {
+    const b = h('button', `chip${all === (value === 'all') ? ' is-active' : ''}`);
+    b.type = 'button'; b.textContent = label;
+    b.addEventListener('click', () => onNavigate('managers', { ...params, tab: 'coverage', coverage: value }));
+    bar.append(b);
+  }
+  wrap.append(h('h2', 'panel-title', 'Crew coverage'),
+    h('p', 'muted', 'Review nights with scheduler fallback, unapproved staff lists or missing management roles. Missing roles are left unassigned. Open reconciliation sessions are labelled separately; an open session can already have an approved staff list.'), bar);
+  const shown = all ? rows : issues;
+  if (!rows.length) wrap.append(h('p', 'muted', 'No crew coverage period is available yet.'));
+  else if (!shown.length) wrap.append(h('p', 'muted', 'Every session in this period has an approved Validator crew with all three management roles.'));
+  else {
+    const table = h('table', 'rn-table mg-coverage');
+    table.innerHTML = '<thead><tr><th>Date</th><th>Hall</th><th>Session</th><th>Crew from</th><th>Missing management roles</th></tr></thead><tbody></tbody>';
+    for (const { e, source, missing } of shown) {
+      const tr = h('tr');
+      const date = h('td');
+      const link = h('button', 'mg-name');
+      link.type = 'button'; link.textContent = `${dateShort(e.event_date)} ${e.event_date.slice(0, 4)}`;
+      link.addEventListener('click', () => onNavigate('session', { id: e.id }));
+      date.append(link); tr.append(date);
+      for (const value of [locations.get(e.location_id) ?? DASH, sessionType(e.event_type),
+        source ? crewFrom(source) : 'No crew recorded', missing.length ? missing.join(', ') : 'None']) {
+        const td = h('td'); td.textContent = value; tr.append(td);
+      }
+      table.querySelector('tbody').append(tr);
+    }
+    wrap.append(table);
+  }
+
+  const report = model.validator?.ok ? model.validator.report : null;
+  const section = h('section', 'panel');
+  section.append(h('h3', 'panel-title', 'Validator sessions awaiting a match'));
+  if (!report) section.append(h('p', 'muted', 'Validator data is unavailable. Matching cannot be checked.'));
+  else {
+    // A count mismatch is one affected day, not one warning for every session on it.
+    const unmatched = (report.unmatched ?? []).filter((u) => u.reason !== 'count').map((u) => ({
+      date: u.date, hall: u.hall, time: u.time,
+      reason: u.reason === 'hall' ? 'Hall has no matching analytics location' : 'No analytics results for this hall and date',
+    }));
+    for (const m of report.mismatched ?? []) unmatched.push({ date: m.date, hall: m.hall, time: 'Whole day',
+      reason: `${m.validator} Validator sessions, ${m.events} analytics sessions — cannot assign crews reliably` });
+    unmatched.sort((a, b) => b.date.localeCompare(a.date) || String(a.hall).localeCompare(String(b.hall)));
+    section.append(h('p', 'muted', 'Includes all loaded Validator records, even outside the crew coverage period above. These records are not attributed to a result until a reliable match exists.'));
+    if (!unmatched.length) section.append(h('p', 'muted', 'All Validator sessions match analytics results.'));
+    else {
+      const table = h('table', 'rn-table mg-unmatched');
+      table.innerHTML = '<thead><tr><th>Date</th><th>Hall</th><th>Time</th><th>Reason</th></tr></thead><tbody></tbody>';
+      for (const u of unmatched) {
+        const tr = h('tr');
+        for (const value of [`${dateShort(u.date)} ${u.date.slice(0, 4)}`, hallName(u.hall), u.time ?? DASH, u.reason]) {
+          const td = h('td'); td.textContent = value; tr.append(td);
+        }
+        table.querySelector('tbody').append(tr);
+      }
+      section.append(table);
+    }
+  }
+  wrap.append(section);
+  return wrap;
 }
 
 function unavailablePanel() {
@@ -601,6 +684,7 @@ export function renderManagers({ data, params, onNavigate, setInspectorContent }
 
   if (tab === 'overview') root.append(overview(model, params, onNavigate));
   else if (tab === 'person') root.append(person(model, params, data, onNavigate));
+  else if (tab === 'coverage') root.append(coverage(model, params, data, onNavigate));
   else root.append(dayshape(model, data));
 
   const r = model.report;

@@ -29,6 +29,7 @@ import {
   dateLong, dateShort, weekday, sessionType, esc, DASH,
 } from '../lib/fmt.js';
 import { donutChart, waterfallChart, bandedTrendChart } from '../lib/charts.js';
+import { validatorClosureLabel } from '../lib/crew-model.js';
 import {
   POOL_PERIODS, JACKPOT_FILTERS, PAGES, poolOptions, pageOf, filterJackpot, sessionPool,
   poolSentence, poolTotals, categoryComparison, distribution, netDrivers, bridgeItems,
@@ -1066,6 +1067,7 @@ function renderValidatorCrew(wrap, v, onNavigate) {
   }
   const src = h('span', `crew-src ${v.approved ? 'dim' : 'crew-pending'}`);
   src.textContent = v.approved ? 'from the validator (approved)' : 'from the validator (not yet approved)';
+  src.textContent += ` · ${validatorClosureLabel(v.session?.status)}`;
   wrap.append(src);
   return wrap;
 }

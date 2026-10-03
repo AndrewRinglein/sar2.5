@@ -17,7 +17,7 @@ test('market membership follows the 50-mile hall radius and city fallback withou
   assert.equal(inMarket({city:'Unknown'},'bay-area'),false);
 });
 
-const hall={id:'vanguard',name:'Vanguard Santa Clara',city:'Santa Clara',address:'Santa Clara, CA',location:{lat:37.37,lng:-121.95},schedule:{days:['Friday']},publishedPrograms:[]};
+const hall={competitionEligibility:{status:'qualified'},id:'vanguard',name:'Vanguard Santa Clara',city:'Santa Clara',address:'Santa Clara, CA',location:{lat:37.37,lng:-121.95},schedule:{days:['Friday']},publishedPrograms:[]};
 const msg=(id,body,extra={})=>({id,body,hallId:hall.id,channel:'sms',kind:'promotion',receivedAt:'2026-10-01T12:00:00Z',...extra});
 test('evidence keeps two promotions separate and excludes unrelated and procedural messages',()=>{
   const rows=evidenceFor(hall,[msg('a','10 mains $2,500'),msg('b','4 premiums $5,000',{channel:'email'}),msg('a','duplicate'),msg('c','Welcome',{kind:'procedural'}),msg('d','2 games $100',{hallId:'other'})]);

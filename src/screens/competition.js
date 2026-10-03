@@ -31,7 +31,7 @@ export function renderCompetition({ request = serverRequest, params = {}, onNavi
   root.dispose = () => { disposed=true; mapGeneration++; clearMaps(); };
   const cfgFor = id => { const existing=scenarios[id]; return scenarios[id]={...defaults(),...(existing && typeof existing==='object'?existing:{}),features:existing?.features && typeof existing.features==='object'?existing.features:{}}; };
   const persist = () => { try { localStorage.setItem(STORE, JSON.stringify(scenarios)); } catch { status.textContent = 'Scenario could not be saved in this browser. Export it to keep a copy.'; } };
-  const halls = () => (snapshot?.halls || []).filter(h => !h.excludedFromCoverage && !h.duplicateOf);
+  const halls = () => (snapshot?.halls || []).filter(h => !h.excludedFromCoverage && !h.duplicateOf && h.competitionEligibility?.status === 'qualified');
   const allEvidence = hall => evidenceFor(hall, histories.get(hall.id)?.messages || snapshot?.summaries?.find(s => s.hallId === hall.id)?.latest && [snapshot.summaries.find(s => s.hallId === hall.id).latest] || []);
   const countFor = id => snapshot?.summaries?.find(s => s.hallId === id)?.count || 0;
   const sourceValue = h => {
@@ -106,7 +106,7 @@ export function renderCompetition({ request = serverRequest, params = {}, onNavi
       const missing=rows.filter(({h})=>!h.location).length;
       const card=node('section','panel scout-area-card');card.setAttribute('aria-label',`${region.name} map`);
       const heading=node('div','scout-area-heading');heading.append(node('h3','',esc(region.name)),button(`Open ${region.name} map`,()=>openArea(id)));
-      card.append(heading,node('p','dim',`${rows.length} program listings · ${missing} need coordinates · 50-mile radius`));
+      card.append(heading,node('p','dim',`${rows.length} qualifying bingo programs · ${missing} need coordinates · 50-mile radius`));
       card.append(coveragePanel(id,false));
       const host=node('div','scout-map scout-area-map');host.setAttribute('aria-label',`${region.name} competitive map`);card.append(host);
       if(id==='bay-area')card.append(node('p','dim','Includes Santa Clara Vanguard and Redwood City Vanguard as separate locations.'));
@@ -150,7 +150,7 @@ export function renderCompetition({ request = serverRequest, params = {}, onNavi
       (historical || !/closed|historical|legacy|suspended/i.test(`${h.name} ${h.operatingStatus || ''} ${h.researchStatus || ''}`)));
     const rows = candidates.map(h => ({ h, p: proximity(center,h) })).filter(r => !center || !r.p || r.p.minutes <= maxMinutes && r.p.overlap >= minOverlap);
     const missing = rows.filter(r => !r.h.location).length;
-    body.append(node('p','dim',`${rows.length} program listings · ${missing} without map coordinates. Coverage is incomplete. Drive times and crossover are Scout distance-based assumptions, not traffic routes or measured shared players. Unknown locations stay in the list.`));
+    body.append(node('p','dim',`${rows.length} qualifying bingo programs · ${missing} without map coordinates. Website and at least weekly bingo required; senior centers, restaurants/pubs, libraries and unverified schedules excluded. Coverage is incomplete. Drive times and crossover are Scout distance-based assumptions, not traffic routes or measured shared players. Unknown locations stay in the list.`));
     const host = node('div','scout-map'); host.setAttribute('aria-label',markets.find(m=>m.id===market).name+' competitive map'); body.append(host);
     mountMap(host, rows, center, mapGeneration);
     const table = node('table','cat-table');
@@ -257,7 +257,7 @@ export function renderCompetition({ request = serverRequest, params = {}, onNavi
     try {
       const next=await request('/api/competitive'); if(generation!==loadGeneration)return;
       if(!Array.isArray(next.halls))throw Error('Invalid collection');snapshot=next;histories.clear();
-      status.textContent=`${halls().length} California program listings · SMS sync ${timeLabel(snapshot.lastSync)} · email sync ${timeLabel(snapshot.lastEmailSync)}`;
+      status.textContent=`${halls().length} California qualifying bingo programs · SMS sync ${timeLabel(snapshot.lastSync)} · email sync ${timeLabel(snapshot.lastEmailSync)}`;
       retry.hidden=true;
       draw();if(selected&&tab==='evidence')loadHistory(selected);
     } catch { if(generation===loadGeneration){status.textContent='Collection unavailable. Check the SAR server connection and retry. Previously loaded data, if shown, has not refreshed.';retry.hidden=false;} }

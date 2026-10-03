@@ -74,6 +74,12 @@ export function cleanName(s) {
 /** The matching key: `cleanName`, case-folded. */
 export const nameKey = (s) => cleanName(s).toLocaleLowerCase('en-US');
 
+/** Staff-list approval and completion of the whole reconciliation are separate. */
+export function validatorClosureLabel(status) {
+  return status === 'closed' ? 'session closed'
+    : status === 'open' ? 'session open' : 'session status unknown';
+}
+
 const wordsOf = (key) => (key ? key.split(' ') : []);
 
 /** 'HH:MM' or 'HH:MM:SS' to minutes since midnight, or null. */
@@ -705,7 +711,8 @@ export function mergeCrewSources({ events = [], schedCrew = new Map(), crew = nu
     const v = crew?.ok ? crew.byEvent.get(e.id) : null;
     if (v && v.crew.length) {
       crewOf.set(e.id, v.managers);
-      sourceOf.set(e.id, { source: 'validator', approved: v.approved, sessionId: v.session.id });
+      sourceOf.set(e.id, { source: 'validator', approved: v.approved, sessionId: v.session.id,
+        sessionStatus: v.session.status, closedAt: v.session.closedAt });
     } else if (schedCrew.has(e.id)) {
       crewOf.set(e.id, schedCrew.get(e.id));
       sourceOf.set(e.id, { source: 'scheduler', approved: null, sessionId: null });

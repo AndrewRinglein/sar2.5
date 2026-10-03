@@ -972,3 +972,22 @@ Staff, Commission, Forecast and Managers render with no console errors and
 match the independent SQL figures logged on 1 Oct.
 
 Tests: 641 pass. lint-tokens clean. vite build OK.
+
+## 2026-10-02 — Managers crew coverage drilldown (local)
+
+Added Managers > Coverage. The default view lists sessions needing review:
+scheduler fallback, missing crew, unapproved Validator staff lists, or missing
+MOD / Paymaster / Flash Manager roles. All sessions uses the same crew date span
+as the existing headline counts. Date buttons open Session Detail.
+
+A separate table identifies Validator records without analytics results, unknown
+halls, and differing session counts. Count conflicts are listed once per day;
+the matching rule and source data are unchanged. Approved staff on an open
+reconciliation stays covered; the session's open/closed label remains separate.
+
+Regression checks cover missing roles, period boundaries, session navigation,
+filter navigation, approval versus closure, conflict deduplication, unavailable
+Validator data, and safe rendering of unknown hall names. Build and 681 tests
+pass. Local server restarted on 127.0.0.1:5173. Browser verification was blocked
+by the browser URL policy when binding the existing unreachable-page tab;
+this new view has not yet been verified against live data in the browser.

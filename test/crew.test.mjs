@@ -309,7 +309,8 @@ test('crew source: validator first, scheduler second, progress flagged, empty cr
     ev('e6', 'LS', '2026-08-06'), ev('e7', 'LS', '2026-08-07'), ev('e9', 'LS', '2026-09-30')];
   const m = mergeCrewSources({ events, schedCrew: sched, crew });
   assert.equal(m.crewOf.get('e3').MOD.staffId, 's5', 'validator beats the scheduler');
-  assert.deepEqual(m.sourceOf.get('e4'), { source: 'validator', approved: false, sessionId: crew.byEvent.get('e4').session.id });
+  assert.deepEqual(m.sourceOf.get('e4'), { source: 'validator', approved: false,
+    sessionId: crew.byEvent.get('e4').session.id, sessionStatus: 'closed', closedAt: null });
   assert.equal(m.sourceOf.get('e5').source, 'scheduler', 'a validator crew with no names falls back');
   assert.equal(m.sourceOf.get('e6').source, 'scheduler');
   assert.equal(m.sourceOf.has('e7'), false);
@@ -500,6 +501,7 @@ function screenData({ validator = true } = {}) {
     schedule: { ...schedule, validator: validator ? { ok: true, rows: [] } : { ok: false, rows: [] } } };
   data.crew = validator ? buildCrewModel({ validator: { ok: true, rows: [
     ...crew.sessions.filter((s) => s.date !== '2026-09-20').map((s) => ({ id: s.id, hall_id: s.hall, session_date: s.date, session_time: s.time,
+      status: s.status, closed_at: s.closedAt,
       staff_status: 'approved', crew: s.crew.map((c) => ({ name: c.name, role: c.role, slot: c.slot })) })),
     vrow('sc', '2026-09-20', '18:30', [['Robin Vale', 'MOD'], ['<b>Pat</b>', 'Flash Runners']], 'progress'),
   ] }, staff: STAFF, events, hallMap: HALLS }) : buildCrewModel({});
@@ -542,6 +544,7 @@ test('session detail prefers the validator crew, by role, labelled with its appr
   const late = render(renderSession, data, { id: 'x2' }, (...a) => nav.push(a)).node.querySelector('.crew');
   assert.match(late.textContent, /Max Tern/);
   assert.match(late.textContent, /from the validator \(approved\)/);
+  assert.match(late.textContent, /session closed/);
   const early = render(renderSession, data, { id: 'x3' }, (...a) => nav.push(a)).node.querySelector('.crew');
   assert.match(early.textContent, /Callers\/Strip/);
   assert.match(early.textContent, /Ari Lune/);
@@ -555,6 +558,74 @@ test('session detail prefers the validator crew, by role, labelled with its appr
   const off = screenData({ validator: false });
   const sched = render(renderSession, off, { id: 'x3' }).node.querySelector('.crew');
   assert.match(sched.textContent, /from the scheduler · validator not connected/);
+});
+
+test('approved staff on an open or unknown session is not presented as a closed reconciliation', () => {
+  for (const [status, label] of [['open', 'session open'], ['closed', 'session closed'], [null, 'session status unknown']]) {
+    const data = screenData();
+    const v = data.crew.byEvent.get('x2');
+    v.session.status = status;
+    // Reopening can leave an earlier close timestamp; current status governs the label.
+    v.session.closedAt = '2026-08-16T01:00:00Z';
+    data.managers = buildManagerModel({ events: data.events, locations: LOCS,
+      schedule: data.schedule, valuesOf: makeValuesOf(data), crew: data.crew });
+    const person = data.managers.people.find(p => p.staffId === 's5' && p.role === 'MOD');
+    const night = person.sessions.find(s => s.eventId === 'x2');
+    assert.equal(night.approved, true);
+    assert.equal(night.sessionStatus, status);
+    assert.equal(night.closedAt, v.session.closedAt);
+    const session = render(renderSession, data, { id: 'x2' }).node.querySelector('.crew').textContent;
+    assert.ok(session.includes(`from the validator (approved) · ${label}`));
+    const manager = render(renderManagers, data, { tab: 'person', staff: 's5', role: 'MOD' }).node.textContent;
+    assert.ok(manager.includes(`validator · ${label}`));
+  }
+});
+
+test('Managers Coverage exposes missing roles, fallback and missing crews without extending the coverage period', () => {
+  const data = screenData();
+  data.events.push(ev('gap', 'LS', '2026-08-18'), ev('old', 'LS', '2025-01-01'));
+  data.managers.sourceOf.set('x2', { source: 'scheduler', approved: null });
+  data.managers.crewOf.set('x2', { MOD: { name: 'Max Tern', staffId: 's5' } });
+  const nav = [];
+  const node = render(renderManagers, data, { tab: 'coverage' }, (...a) => nav.push(a)).node;
+  const rows = [...node.querySelectorAll('.mg-coverage tbody tr')];
+  const gap = rows.find((r) => r.textContent.includes('18 Aug 2026'));
+  assert.ok(gap);
+  assert.match(gap.textContent, /No crew recorded/);
+  assert.match(gap.textContent, /MOD, Paymaster, Flash Manager/);
+  assert.ok(!rows.some((r) => r.textContent.includes('2025')), 'old unstaffed history is outside the headline period');
+  const fallback = rows.find((r) => r.textContent.includes('scheduler'));
+  assert.match(fallback.textContent, /Paymaster, Flash Manager/);
+  gap.querySelector('button').click();
+  assert.deepEqual(nav.at(-1), ['session', { id: 'gap' }]);
+  [...node.querySelectorAll('button')].find((b) => /All sessions/.test(b.textContent)).click();
+  assert.deepEqual(nav.at(-1), ['managers', { tab: 'coverage', coverage: 'all' }]);
+});
+
+test('Managers Coverage treats staff approval separately from reconciliation closure and lists matching failures once per day', () => {
+  const data = screenData();
+  // An approved, complete crew remains covered even if the reconciliation is open.
+  data.managers.sourceOf.set('x2', { source: 'validator', approved: true, sessionStatus: 'open' });
+  data.managers.crewOf.set('x2', Object.fromEntries(['MOD', 'Paymaster', 'Flash Manager'].map((r) => [r, { name: 'Alex' }])));
+  data.managers.validator.report = { matched: 1,
+    unmatched: [
+      { date: '2026-10-02', hall: 'sc', time: '18:30', reason: 'no-results' },
+      { date: '2026-08-23', hall: 'sc', time: '13:00', reason: 'count' },
+      { date: '2026-08-23', hall: 'sc', time: '18:30', reason: 'count' },
+      { date: '2026-08-22', hall: '<b>Unknown</b>', time: '18:30', reason: 'hall' },
+    ], mismatched: [{ date: '2026-08-23', hall: 'sc', validator: 2, events: 1 }] };
+  const gaps = render(renderManagers, data, { tab: 'coverage' }).node;
+  assert.ok(![...gaps.querySelectorAll('.mg-coverage tbody tr')].some((r) => /Late/.test(r.textContent)));
+  const all = render(renderManagers, data, { tab: 'coverage', coverage: 'all' }).node;
+  assert.match(all.querySelector('.mg-coverage').textContent, /validator · session open/);
+  const failures = all.querySelectorAll('.mg-unmatched tbody tr');
+  assert.equal(failures.length, 3);
+  assert.match(failures[0].textContent, /2 Oct 2026.*Santa Clara.*No analytics results/);
+  assert.match(failures[1].textContent, /2 Validator sessions, 1 analytics sessions/);
+  assert.match(failures[2].textContent, /Hall has no matching analytics location/);
+  assert.equal(all.querySelector('b'), null, 'unknown hall names are rendered as text');
+  const off = render(renderManagers, screenData({ validator: false }), { tab: 'coverage' }).node;
+  assert.match(off.textContent, /Validator data is unavailable/);
 });
 
 test('Sources lists the validator with its coverage, or says it is not connected', () => {

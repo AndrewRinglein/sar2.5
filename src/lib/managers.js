@@ -521,7 +521,8 @@ export function buildManagerModel({
       }
       const src = sourceOf.get(eventId);
       entry.sessions.push({ eventId, scores, checks: balanceChecks(cache.get(eventId) ?? {}),
-        source: src?.source ?? null, approved: src?.approved ?? null });
+        source: src?.source ?? null, approved: src?.approved ?? null,
+        sessionStatus: src?.sessionStatus ?? null, closedAt: src?.closedAt ?? null });
       byPersonRole.set(key, entry);
     }
   }
