@@ -1,5 +1,6 @@
 import { extractProgram, summarizePublishedProgram } from './competitive-program.js';
 import { miles } from './competitive-markets.js';
+import { isProcedural } from './competitive-inbox.js';
 
 // Scout V2 scenario assumptions, not measured effects or promises.
 export const FEATURES = {
@@ -33,7 +34,7 @@ export function evidenceFor(hall, messages = []) {
       subtotal:parsed.advertisedSubtotal,advertisedTotal:null,label:'Bingo Scout V2 reference · import date, not verification date; may be historical'});
   }
   for (const m of messages) {
-    if (seen.has(m.id) || m.kind === 'procedural' || m.kind === 'operational') continue;
+    if (seen.has(m.id) || isProcedural(m)) continue;
     if (m.hallId !== hall.id && !(m.hallIds || []).includes(hall.id)) continue;
     seen.add(m.id);
     const p = extractProgram(m.body || '');

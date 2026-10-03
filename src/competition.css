@@ -28,3 +28,31 @@
 .scout-area-map { height:19rem; margin:var(--s-3) 0 0; }
 .scout-area-title { margin-bottom:var(--s-4); }
 @media(max-width:850px) { .scout-area-grid { grid-template-columns:1fr; } }
+/* Hall inbox */
+.scout-inbox { display:grid; gap:var(--s-3); }
+.scout-hall { padding:0; overflow:hidden; }
+.scout-hall-top { display:flex; flex-wrap:wrap; align-items:baseline; gap:var(--s-2) var(--s-4); width:100%; text-align:left; background:none; border:0; border-radius:0; padding:var(--s-3) var(--s-4); }
+.scout-hall-top:hover:not(:disabled) { background:var(--surface-2); border-color:transparent; }
+.scout-hall-name { font-weight:600; }
+.scout-counts { margin-left:auto; font-size:var(--t-sm); }
+.scout-latest { padding:0 var(--s-4) var(--s-3); font-size:var(--t-sm); overflow-wrap:anywhere; }
+.scout-hall.is-open { border-color:var(--accent); }
+.scout-hall > .chip, .scout-hall > p.dim, .scout-hall > p.tone-neg { margin:0 var(--s-4) var(--s-3); }
+.scout-msgs { list-style:none; margin:0; padding:0 var(--s-4) var(--s-3); display:grid; gap:var(--s-3); }
+.scout-day .scout-msgs { padding:0; }
+.scout-day { padding:var(--s-4); margin-bottom:var(--s-4); }
+.scout-day h4 { margin:0; align-self:center; }
+.scout-msg { border-left:3px solid var(--hair); padding:var(--s-1) var(--s-3); }
+.scout-msg-email { border-left-color:var(--accent); }
+.scout-msg-head { display:flex; flex-wrap:wrap; gap:var(--s-2); align-items:baseline; font-size:var(--t-sm); }
+.scout-msg-halls { font-weight:600; }
+.scout-msg-subject { font-weight:600; margin-top:var(--s-1); }
+.scout-msg .scout-message { margin:var(--s-1) 0 0; max-height:14rem; }
+.scout-chan { font-size:var(--t-xs); text-transform:uppercase; letter-spacing:.06em; padding:0 var(--s-1); border:1px solid var(--hair); border-radius:var(--r-sm); }
+.scout-chan-email { color:var(--accent); border-color:var(--accent); }
+.scout-elig { font-size:var(--t-xs); padding:0 var(--s-1); border-radius:var(--r-sm); border:1px solid var(--hair); }
+.scout-elig-qualified { color:var(--pos); border-color:var(--pos); }
+.scout-elig-needs_verification { color:var(--warn); border-color:var(--warn); }
+.scout-uncertain { margin:var(--s-4) 0; }
+.scout-uncertain summary { cursor:pointer; }
+td small, td .chip + small { display:block; }

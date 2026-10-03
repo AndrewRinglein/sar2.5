@@ -3,6 +3,8 @@ import { serverRequest } from '../lib/server-request.js';
 import { markets, inMarket, enrollmentLabel, MARKET_RADIUS_MILES } from '../lib/competitive-markets.js';
 import { coverage } from '../lib/competitive-coverage.js';
 import { defaults, evidenceFor, business, projection, proximity, FEATURES, safeUrl, payoutBand } from '../lib/competitive-model.js';
+import { inboxCards, historyRows, dayRows, directory, directoryRows, eligibilityOf, ELIGIBILITY, locationCount, validDay } from '../lib/competitive-inbox.js';
+import { hallToday } from '../lib/fmt.js';
 
 const node = (tag, cls, html) => { const e = document.createElement(tag); e.className = cls || ''; if (html !== undefined) e.innerHTML = html; return e; };
 // Scout/collector values are dollars; SAR's shared formatter accepts cents.
@@ -25,9 +27,12 @@ export function renderCompetition({ request = serverRequest, params = {}, onNavi
   const controls = node('div', 'scout-controls');
   const body = node('div');
   root.append(header, status, controls, body);
-  let snapshot, selected = params.hall || '', tab = params.area ? 'map' : 'areas', market = markets.some(m=>m.id===params.area) ? params.area : 'bay-area', origin = '', query = '', day = '',
+  let snapshot, selected = params.hall || '', tab = params.area ? 'map' : (['inbox','areas','directory'].includes(params.tab) ? params.tab : 'inbox'), market = markets.some(m=>m.id===params.area) ? params.area : 'bay-area', origin = '', query = '', day = '',
     maxMinutes = 120, minOverlap = 0, band = '', historical = false, map, mapGeneration = 0, loadGeneration = 0;
   const histories = new Map(), historyBusy = new Set(), historyError = new Map(), scenarios = saved();
+  // Inbox: which hall cards are open, the day being read, and each day's updates.
+  const inboxOpen = new Set(); let inboxDay = validDay(params.day) || hallToday(); const days = new Map(), dayBusy = new Set(), dayError = new Map();
+  let dirStatus = '', dirQuery = '';
   const maps = new Set();
   const clearMaps=()=>{for(const instance of maps)instance.remove();maps.clear();map=null;};
   let disposed = false;
@@ -35,6 +40,10 @@ export function renderCompetition({ request = serverRequest, params = {}, onNavi
   const cfgFor = id => { const existing=scenarios[id]; return scenarios[id]={...defaults(),...(existing && typeof existing==='object'?existing:{}),features:existing?.features && typeof existing.features==='object'?existing.features:{}}; };
   const persist = () => { try { localStorage.setItem(STORE, JSON.stringify(scenarios)); } catch { status.textContent = 'Scenario could not be saved in this browser. Export it to keep a copy.'; } };
   const halls = () => (snapshot?.halls || []).filter(h => !h.excludedFromCoverage && !h.duplicateOf && h.competitionEligibility?.status === 'qualified');
+  // Every hall the monitor knows, for the inbox, the directory and a hall's own page.
+  const known = () => directory(snapshot?.halls || []);
+  const uncertain = () => known().filter(h => !h.excludedFromCoverage && h.competitionEligibility?.status === 'needs_verification');
+  const isCurrent = h => !/closed|historical|legacy|suspended/i.test(`${h.name} ${h.operatingStatus||''} ${h.researchStatus||''}`);
   const allEvidence = hall => evidenceFor(hall, histories.get(hall.id)?.messages || snapshot?.summaries?.find(s => s.hallId === hall.id)?.latest && [snapshot.summaries.find(s => s.hallId === hall.id).latest] || []);
   const countFor = id => num(snapshot?.summaries?.find(s => s.hallId === id)?.count);
   const sourceValue = h => {
@@ -71,26 +80,31 @@ export function renderCompetition({ request = serverRequest, params = {}, onNavi
       const page = await request(`/api/competitive?hall=${encodeURIComponent(id)}&offset=${more ? old.length : 0}`);
       histories.set(id, { messages: more ? [...old, ...page.messages] : page.messages, hasMore: page.hasMore });
     } catch { historyError.set(id, 'Message history is unavailable. Retry to load it.'); }
-    finally { historyBusy.delete(id); if (selected === id) draw(); }
+    finally { historyBusy.delete(id); if (selected === id || (tab === 'inbox' && inboxOpen.has(id))) draw(); }
   }
   function draw() {
     if (!snapshot || disposed) return;
     mapGeneration++; clearMaps();
     controls.replaceChildren(); body.replaceChildren();
     const filters = node('div', 'scout-filters');
+    filters.append(button('Inbox',()=>{tab='inbox';draw();},tab==='inbox'));
     filters.append(button('All area maps',()=>{tab='areas';draw();},tab==='areas'));
+    filters.append(button('Directory',()=>{tab='directory';draw();},tab==='directory'));
     filters.append(selectControl('Area', markets.map(m => [m.id,m.name]), market, openArea));
-    filters.append(selectControl('Hall', [['','Choose a hall'], ...halls().filter(h => inMarket(h,market)).map(h => [h.id,h.name])], selected, choose));
+    filters.append(selectControl('Hall', [['','Choose a hall'], ...halls().filter(h => inMarket(h,market)).map(h => [h.id,h.name]),
+      ...(selected && !halls().some(h => h.id === selected) && known().some(h => h.id === selected) ? [[selected, known().find(h => h.id === selected).name]] : [])], selected, choose));
     filters.append(button('Refresh collection', refresh));
     controls.append(filters);
     if(tab==='areas'){renderAreaMaps();return;}
+    if(tab==='inbox'){renderInbox();return;}
+    if(tab==='directory'){renderDirectory();return;}
     const tabs = node('nav', 'scout-tabs'); tabs.setAttribute('aria-label', 'Competitive views');
     for (const [id,title] of [['map','Map'],['evidence','Program evidence'],['business','Business model'],['projection','Projection']]) {
       tabs.append(button(title, () => { tab = id; draw(); if (selected && id === 'evidence') loadHistory(selected); }, id === tab));
     }
     controls.append(tabs);
     if (tab === 'map') return renderMap();
-    const hall = halls().find(h => h.id === selected);
+    const hall = known().find(h => h.id === selected);
     if (!hall) { body.append(node('p', 'placeholder', 'Choose a hall to examine its evidence and model.')); return; }
     const intro = node('section', 'panel', `<h3>${esc(hall.name)}</h3><p>${esc(hall.address || 'Address not verified')}</p><p>${esc(categoryLabel(hall))} · ${esc(statusLabel(hall))}</p><p>${esc(hall.schedule?.days?.join(', ') || 'Days not verified')} · ${link(hall.website,'Website')}</p>`);
     body.append(intro);
@@ -107,9 +121,10 @@ export function renderCompetition({ request = serverRequest, params = {}, onNavi
       const region=markets.find(m=>m.id===id);
       const rows=halls().filter(h=>inMarket(h,id)&&!/closed|historical|legacy|suspended/i.test(`${h.name} ${h.operatingStatus||''} ${h.researchStatus||''}`)).map(h=>({h,p:null}));
       const missing=rows.filter(({h})=>!h.location).length;
+      const toVerify=uncertain().filter(h=>inMarket(h,id)&&isCurrent(h)).length;
       const card=node('section','panel scout-area-card');card.setAttribute('aria-label',`${region.name} map`);
       const heading=node('div','scout-area-heading');heading.append(node('h3','',esc(region.name)),button(`Open ${region.name} map`,()=>openArea(id)));
-      card.append(heading,node('p','dim',`${rows.length} qualifying bingo programs · ${missing} need coordinates · 50-mile radius`));
+      card.append(heading,node('p','dim',`${rows.length} qualifying bingo programs at ${locationCount(rows.map(r=>r.h))} locations · ${missing} need coordinates · ${toVerify} more with a schedule to verify (not counted) · 50-mile radius`));
       card.append(coveragePanel(id,false));
       const host=node('div','scout-map scout-area-map');host.setAttribute('aria-label',`${region.name} competitive map`);card.append(host);
       if(id==='bay-area')card.append(node('p','dim','Includes Santa Clara Vanguard and Redwood City Vanguard as separate locations.'));
@@ -153,20 +168,148 @@ export function renderCompetition({ request = serverRequest, params = {}, onNavi
       (historical || !/closed|historical|legacy|suspended/i.test(`${h.name} ${h.operatingStatus || ''} ${h.researchStatus || ''}`)));
     const rows = candidates.map(h => ({ h, p: proximity(center,h) })).filter(r => !center || !r.p || r.p.minutes <= maxMinutes && r.p.overlap >= minOverlap);
     const missing = rows.filter(r => !r.h.location).length;
-    body.append(node('p','dim',`${rows.length} qualifying bingo programs · ${missing} without map coordinates. Website and at least weekly bingo required; senior centers, restaurants/pubs, libraries and unverified schedules excluded. Coverage is incomplete. Drive times and crossover are Scout distance-based assumptions, not traffic routes or measured shared players. Unknown locations stay in the list.`));
+    body.append(node('p','dim',`${rows.length} qualifying bingo programs at ${locationCount(rows.map(r=>r.h))} physical locations (several charities can share a hall) · ${missing} without map coordinates. Website and at least weekly bingo required; senior centers, restaurants/pubs, libraries and unverified schedules excluded. Coverage is incomplete. Drive times and crossover are Scout distance-based assumptions, not traffic routes or measured shared players. Unknown locations stay in the list.`));
     const host = node('div','scout-map'); host.setAttribute('aria-label',markets.find(m=>m.id===market).name+' competitive map'); body.append(host);
     mountMap(host, rows, center, mapGeneration);
     const table = node('table','cat-table');
-    table.innerHTML = '<thead><tr><th>Hall</th><th>Days</th><th>Program size</th><th>Updates</th><th>From origin</th><th>Collection / presales</th></tr></thead>';
+    table.innerHTML = '<thead><tr><th>Hall</th><th>Address</th><th>Days</th><th>Program size</th><th>Updates</th><th>From origin</th><th>Signup</th><th>Platforms / presales</th><th>Sources</th></tr></thead>';
     const tbody = node('tbody'); table.append(tbody);
     for (const { h,p } of rows.sort((a,b) => a.h.name.localeCompare(b.h.name))) {
       const tr = node('tr'); const name = node('td'); name.append(button(h.name, () => choose(h.id))); name.append(node('small','dim',esc(h.city)),node('small','dim',esc(categoryLabel(h))),node('small','dim',esc(statusLabel(h)))); tr.append(name);
       const value = sourceValue(h);
       const partial=allEvidence(h).find(e=>e.subtotal>0);
-      tr.insertAdjacentHTML('beforeend', `<td>${esc(h.schedule?.days?.join(', ') || 'Unknown')}</td><td>${value ? money(value) : partial ? `${money(partial.subtotal)} partial` : 'Unknown'}<small>${value ? payoutBand(value)+' · advertised / modeled' : 'Full program unknown'}</small>${partial&&!value?`<small>${esc(partial.channel)} · ${esc(String(partial.date || '').slice(0,10))}</small>`:''}</td><td>${countFor(h.id)}</td><td>${p ? `${p.minutes.toFixed(0)} min est.<small>${p.overlap.toFixed(1)}% modeled</small>` : '—'}</td><td>${esc(enrollmentLabel(h))}<small>${esc(h.presales?.status === 'available' ? h.presales.platform || 'Presales available' : 'Presales not verified')}</small></td>`);
+      tr.insertAdjacentHTML('beforeend', `<td>${esc(h.address || 'Not verified')}${link(h.website,'Website')?`<small>${link(h.website,'Website')}</small>`:''}</td><td>${esc(h.schedule?.days?.join(', ') || 'Unknown')}</td><td>${value ? money(value) : partial ? `${money(partial.subtotal)} partial` : 'Unknown'}<small>${value ? payoutBand(value)+' · advertised / modeled' : 'Full program unknown'}</small>${partial&&!value?`<small>${esc(partial.channel)} · ${esc(String(partial.date || '').slice(0,10))}</small>`:''}</td><td>${countFor(h.id)}</td><td>${p ? `${p.minutes.toFixed(0)} min est.<small>${p.overlap.toFixed(1)}% modeled</small>` : '—'}</td><td>${esc(enrollmentLabel(h))}</td><td>${platformCell(h)}</td><td>${sourcesCell(h)}</td>`);
       tbody.append(tr);
     }
     const scroll = node('div','scout-table'); scroll.append(table); body.append(scroll);
+    // Halls whose schedule is not yet source-backed: shown, never counted.
+    const pending = uncertain().filter(h => inMarket(h,market) && (historical || isCurrent(h)) && (!query || `${h.name} ${h.city}`.toLowerCase().includes(query.toLowerCase())));
+    if (pending.length) {
+      const box = node('details','scout-uncertain');
+      box.append(node('summary','',`${pending.length} more listing${pending.length===1?'':'s'} in this area with an uncertain schedule — not on the map and not counted above`));
+      const t = node('table','cat-table');
+      t.innerHTML = '<thead><tr><th>Hall</th><th>Address</th><th>Why not counted</th><th>Website</th><th>Updates</th></tr></thead>';
+      const tb = node('tbody');
+      for (const h of pending.sort((a,b)=>a.name.localeCompare(b.name))) {
+        const tr = node('tr'); const name = node('td'); name.append(button(h.name, () => choose(h.id))); name.append(node('small','dim',esc(h.city||''))); tr.append(name);
+        tr.insertAdjacentHTML('beforeend', `<td>${esc(h.address || 'Not verified')}</td><td>${esc(eligibilityOf(h).reason || 'Schedule not verified')}</td><td>${link(h.website,'Website') || '—'}</td><td>${countFor(h.id)}</td>`);
+        tb.append(tr);
+      }
+      t.append(tb); const sc = node('div','scout-table'); sc.append(t); box.append(sc); body.append(box);
+    }
+  }
+  function platformCell(h) {
+    const parts = [];
+    for (const p of h.platforms || []) parts.push(link(p.url, p.name) || esc(p.name || ''));
+    const pre = h.presales || {};
+    const presale = pre.status === 'available' ? `Presales: ${link(pre.url, pre.platform || 'available') || esc(pre.platform || 'available')}`
+      : pre.status === 'unclear' ? `Presales unclear${pre.platform ? ` (${esc(pre.platform)})` : ''}` : 'Presales not found';
+    return `${parts.filter(Boolean).join('<br>') || '—'}<small>${presale}</small>`;
+  }
+  function sourcesCell(h) {
+    const urls = [...new Set([h.schedule?.sourceUrl, h.addressSourceUrl, ...(h.sourceUrls || [])].filter(Boolean))];
+    const shown = urls.map((u, i) => link(u, `Source ${i + 1}`)).filter(Boolean);
+    const checked = h.schedule?.verifiedAt || h.lastResearchedAt;
+    return `${shown.join('<br>') || '—'}${checked ? `<small>checked ${esc(String(checked).slice(0,10))}</small>` : ''}`;
+  }
+
+  /* ---- Inbox: one card per hall, texts and emails together ---- */
+  async function loadDay(d) {
+    if (days.has(d) || dayBusy.has(d)) return;
+    dayBusy.add(d); dayError.delete(d); if (tab === 'inbox') draw();
+    try {
+      const page = await request(`/api/competitive?day=${encodeURIComponent(d)}`);
+      if (!Array.isArray(page?.messages)) throw Error('Invalid day');
+      days.set(d, page.messages);
+    } catch { dayError.set(d, 'Updates for this day are unavailable. Retry to load them.'); }
+    finally { dayBusy.delete(d); if (tab === 'inbox' && inboxDay === d) draw(); }
+  }
+  function messageItem(r, { showHalls = false } = {}) {
+    const li = node('li', `scout-msg scout-msg-${r.channel.toLowerCase()}`);
+    const head = node('div','scout-msg-head');
+    head.append(node('span',`scout-chan scout-chan-${r.channel.toLowerCase()}`, esc(r.channel)), node('span','dim', esc(timeLabel(r.at))));
+    if (showHalls) head.append(node('span','scout-msg-halls', r.unassigned ? 'Not yet matched to a hall' : esc(r.halls.join(', '))));
+    li.append(head);
+    if (r.subject) li.append(node('div','scout-msg-subject', esc(r.subject)));
+    const body = node('p','scout-message'); body.textContent = r.body; li.append(body);
+    if (!showHalls && r.sharedWith?.length) li.append(node('small','dim', `Also sent to ${esc(r.sharedWith.join(', '))} (shared list)`));
+    return li;
+  }
+  function renderInbox() {
+    const cards = inboxCards(snapshot);
+    const totals = cards.reduce((t,c)=>({total:t.total+c.total,sms:t.sms+c.sms,email:t.email+c.email}),{total:0,sms:0,email:0});
+    body.append(node('h3','', 'Hall inbox'));
+    body.append(node('p','dim',`${cards.length} halls have sent ${num(totals.total)} updates: ${num(totals.sms)} texts and ${num(totals.email)} emails, newest first. Each hall is one card, matched by its hall ID, never by the sending number (many halls share one short code). Welcome, verification and enrollment messages are left out. Calls are not collected.`));
+
+    // One day across every hall.
+    const daySec = node('section','panel scout-day');
+    const dayHead = node('div','scout-filters');
+    dayHead.append(node('h4','', 'Updates on'));
+    dayHead.append(input('Day', inboxDay, v => { const d = validDay(v); if (!d) return; inboxDay = d; draw(); loadDay(d); }, { type: 'date' }));
+    dayHead.append(button('Today', () => { inboxDay = hallToday(); draw(); loadDay(inboxDay); }, inboxDay === hallToday()));
+    daySec.append(dayHead);
+    if (dayBusy.has(inboxDay)) daySec.append(node('p','dim','Loading…'));
+    if (dayError.has(inboxDay)) { daySec.append(node('p','tone-neg',esc(dayError.get(inboxDay)))); daySec.append(button('Retry',()=>{dayError.delete(inboxDay);loadDay(inboxDay);})); }
+    if (days.has(inboxDay)) {
+      const rows = dayRows(days.get(inboxDay), snapshot.halls || []);
+      if (!rows.length) daySec.append(node('p','dim','No updates collected on this day.'));
+      else { const ul = node('ul','scout-msgs'); for (const r of rows) ul.append(messageItem(r,{showHalls:true})); daySec.append(ul); }
+    } else if (!dayBusy.has(inboxDay) && !dayError.has(inboxDay)) { daySec.append(node('p','dim','Loading…')); const d=inboxDay; setTimeout(()=>loadDay(d),0); }
+    body.append(daySec);
+
+    const list = node('div','scout-inbox');
+    for (const c of cards) {
+      const open = inboxOpen.has(c.hallId);
+      const card = node('section', `panel scout-hall${open ? ' is-open' : ''}`);
+      const top = node('button','scout-hall-top'); top.type = 'button'; top.setAttribute('aria-expanded', String(open));
+      top.innerHTML = `<span class="scout-hall-name">${esc(c.name)}</span><span class="dim">${esc(c.city)}</span>
+        <span class="scout-counts"><strong>${num(c.total)}</strong> updates · ${num(c.sms)} text${c.sms===1?'':'s'} · ${num(c.email)} email${c.email===1?'':'s'}</span>
+        <span class="scout-elig scout-elig-${esc(c.eligibility.status)}">${esc(c.eligibility.label)}</span>`;
+      top.onclick = () => { if (open) inboxOpen.delete(c.hallId); else { inboxOpen.add(c.hallId); loadHistory(c.hallId); } draw(); };
+      card.append(top);
+      if (c.latest) card.append(node('p','scout-latest',`<span class="scout-chan scout-chan-${c.latest.channel.toLowerCase()}">${esc(c.latest.channel)}</span> <span class="dim">${esc(timeLabel(c.latest.at))}</span>${c.latest.subject ? ` · <strong>${esc(c.latest.subject)}</strong>` : ''}<br>${esc(c.latest.preview)}`));
+      if (open) {
+        const h = histories.get(c.hallId);
+        if (historyBusy.has(c.hallId)) card.append(node('p','dim','Loading the full history…'));
+        if (historyError.has(c.hallId)) { card.append(node('p','tone-neg',esc(historyError.get(c.hallId)))); card.append(button('Retry history',()=>loadHistory(c.hallId))); }
+        if (h) {
+          const rows = historyRows(h.messages, c.hallId, snapshot.halls || []);
+          card.append(node('p','dim',`Showing ${rows.length} of ${num(c.total)}${h.hasMore ? '' : ' — the full history'}.`));
+          const ul = node('ul','scout-msgs'); for (const r of rows) ul.append(messageItem(r)); card.append(ul);
+          if (h.hasMore) card.append(button('Load older texts and emails',()=>loadHistory(c.hallId,true)));
+        }
+        if (c.known) card.append(button('Open program evidence and model',()=>choose(c.hallId)));
+      }
+      list.append(card);
+    }
+    if (!cards.length) list.append(node('p','placeholder','No updates collected yet.'));
+    body.append(list);
+    if (num(snapshot.unassignedCount)) body.append(node('p','dim',`${num(snapshot.unassignedCount)} collected message${num(snapshot.unassignedCount)===1?' is':'s are'} not yet matched to a hall and appear only in the day view.`));
+    setInspectorContent(`<h3>Hall inbox</h3><p>${cards.length} halls with updates.</p><p>SMS sync ${esc(timeLabel(snapshot.lastSync))}<br>Email sync ${esc(timeLabel(snapshot.lastEmailSync))}</p><p class="dim">Texts are collected by the monitor's scheduled job and emails by its mail importer. Advertised offers are not sales or payouts.</p>`);
+  }
+
+  /* ---- Directory: every hall, separate from map eligibility ---- */
+  function renderDirectory() {
+    const all = known();
+    const counts = Object.fromEntries(Object.keys(ELIGIBILITY).map(k => [k, all.filter(h => eligibilityOf(h).status === k).length]));
+    body.append(node('h3','', 'Hall directory'));
+    body.append(node('p','dim',`${all.length} listings the monitor knows: ${counts.qualified} on the competitive maps, ${counts.needs_verification} with a schedule to verify, ${counts.excluded} not competitors (senior centers, restaurants, libraries, social profiles only). The maps count only the first group.`));
+    const f = node('div','scout-filters');
+    f.append(selectControl('Status', [['','All listings'], ...Object.entries(ELIGIBILITY).map(([k,v]) => [k, `${v} (${counts[k]})`])], dirStatus, v => { dirStatus = v; draw(); }));
+    f.append(input('Search', dirQuery, v => { dirQuery = v; draw(); }, { type: 'search' }));
+    body.append(f);
+    const rows = directoryRows(snapshot.halls || [], { status: dirStatus, query: dirQuery });
+    const t = node('table','cat-table');
+    t.innerHTML = '<thead><tr><th>Hall</th><th>Status</th><th>Address</th><th>Days</th><th>Signup</th><th>Platforms / presales</th><th>Updates</th><th>Sources</th></tr></thead>';
+    const tb = node('tbody');
+    for (const h of rows) {
+      const e = eligibilityOf(h);
+      const tr = node('tr'); const name = node('td'); name.append(button(h.name, () => choose(h.id))); name.append(node('small','dim',esc(h.city||''))); tr.append(name);
+      tr.insertAdjacentHTML('beforeend', `<td><span class="scout-elig scout-elig-${esc(e.status)}">${esc(e.label)}</span><small>${esc(e.reason)}</small></td><td>${esc(h.address || 'Not verified')}${link(h.website,'Website')?`<small>${link(h.website,'Website')}</small>`:''}</td><td>${esc(h.schedule?.days?.join(', ') || 'Unknown')}</td><td>${esc(enrollmentLabel(h))}</td><td>${platformCell(h)}</td><td>${countFor(h.id)}</td><td>${sourcesCell(h)}</td>`);
+      tb.append(tr);
+    }
+    t.append(tb); const sc = node('div','scout-table'); sc.append(t); body.append(sc);
+    body.append(node('p','dim',`${rows.length} shown.`));
   }
   async function mountMap(host, rows, center, generation, regionId=market, overview=false) {
     try {
