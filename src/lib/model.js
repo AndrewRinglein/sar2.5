@@ -176,6 +176,31 @@ export function percentile(xs, p) {
   return lo === hi ? s[lo] : s[lo] + (s[hi] - s[lo]) * (i - lo);
 }
 
+/**
+ * Two-sided 97.5% Student t quantile for `df` degrees of freedom. Tabulated
+ * to 30, then the normal value — which is within 2% of the truth beyond it.
+ */
+const T975 = [null, 12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262, 2.228,
+  2.201, 2.179, 2.16, 2.145, 2.131, 2.12, 2.11, 2.101, 2.093, 2.086,
+  2.08, 2.074, 2.069, 2.064, 2.06, 2.056, 2.052, 2.048, 2.045, 2.042];
+export function t975(df) {
+  if (!(df >= 1)) return null;
+  return T975[Math.floor(df)] ?? 1.96;
+}
+
+/**
+ * A 95% PREDICTION interval for the next value from a sample: mean ± t·s·√(1+1/n).
+ * Not a confidence interval for the mean (far too narrow for a single night),
+ * and not the sample's 2.5th–97.5th percentiles, which with 12 points is the
+ * min–max and holds the next night only about 80% of the time.
+ */
+export function predictionInterval(xs) {
+  if (xs.length < 2) return null;
+  const mu = mean(xs);
+  const half = t975(xs.length - 1) * stdev(xs) * Math.sqrt(1 + 1 / xs.length);
+  return { mean: mu, lo: mu - half, hi: mu + half };
+}
+
 export function zScore(value, xs) {
   const sd = stdev(xs);
   if (sd === null || sd === 0) return null;   // no spread: z is undefined, not 0
@@ -369,21 +394,31 @@ export function jackpotMaxPayout(payouts = []) {
 export function jackpotHistory(events, metricsOf, jp) {
   const payouts = [];
   const balances = [];
-  const seenDates = new Set();
   const orgWide = jp.scope === 'org_wide';
 
+  if (!orgWide) {
+    for (const e of events) {
+      const m = metricsOf(e);
+      const payout = Math.abs(getMetric(m, jp.paidKey) ?? 0);
+      const balance = getMetric(m, jp.balanceKey) ?? 0;
+      if (payout > 0) payouts.push(payout);
+      if (balance > 0) balances.push(balance);
+    }
+    return { payouts, balances };
+  }
+  // One shared pot: merge each date across halls (largest reading of each),
+  // so a payout recorded at either hall counts once and is never dropped.
+  const byDate = new Map();
   for (const e of events) {
     const m = metricsOf(e);
-    const payout = Math.abs(getMetric(m, jp.paidKey) ?? 0);
-    const balance = getMetric(m, jp.balanceKey) ?? 0;
-    if (payout > 0) payouts.push(payout);
-    if (balance > 0) {
-      if (orgWide) {
-        if (seenDates.has(e.event_date)) continue;
-        seenDates.add(e.event_date);
-      }
-      balances.push(balance);
-    }
+    const d = byDate.get(e.event_date) ?? { payout: 0, balance: 0 };
+    d.payout = Math.max(d.payout, Math.abs(getMetric(m, jp.paidKey) ?? 0));
+    d.balance = Math.max(d.balance, getMetric(m, jp.balanceKey) ?? 0);
+    byDate.set(e.event_date, d);
+  }
+  for (const d of byDate.values()) {
+    if (d.payout > 0) payouts.push(d.payout);
+    if (d.balance > 0) balances.push(d.balance);
   }
   return { payouts, balances };
 }

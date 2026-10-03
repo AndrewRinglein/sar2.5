@@ -256,11 +256,16 @@ function overview(model, params, onNavigate, rerender) {
     }
 
     const primaryKey = ROLE_METRIC[role];
-    const primary = metricByKey(primaryKey);
-    block.append(h('p', 'muted',
-      `Scored on ${primary.label.toLowerCase()} against the same night in other weeks.`));
-
     const key = sortKey ?? primaryKey;
+    // Every column describes the metric being SHOWN — the sort metric when one
+    // is picked. The header and format used to stay on the role's own metric
+    // while the numbers changed underneath them.
+    const shown = metricByKey(key);
+    block.append(h('p', 'muted', key === primaryKey
+      ? `Scored on ${shown.label.toLowerCase()} against the same night in other weeks.`
+      : `Showing ${shown.label.toLowerCase()} (this role is normally scored on ${
+        metricByKey(primaryKey).label.toLowerCase()}).`));
+
     const rankable = people.filter((p) => p.roll[key]?.rankable);
     const sorted = [...people].sort((a, b) => {
       const ar = a.roll[key]; const br = b.roll[key];
@@ -289,7 +294,7 @@ function overview(model, params, onNavigate, rerender) {
       { label: '95% interval', cls: 'num' },
       { label: 'vs typical', cls: 'num' },
       { label: 'Period', cls: 'num' },
-      { label: primary.label + ' avg', cls: 'num' },
+      { label: shown.label + ' avg', cls: 'num' },
       { label: 'Trend' },
     ];
     table.innerHTML = `<thead><tr>${cols.map((c) =>
@@ -319,7 +324,7 @@ function overview(model, params, onNavigate, rerender) {
         <td class="num dim">${sigma(r.raw)}</td>
         <td class="num dim" title="how the whole business was running on those nights">${sigma(r.trend)}</td>
         <td class="num">${avg.length
-          ? fmtValue(primary.kind, meanOfSessionValues(p, key, model))
+          ? fmtValue(shown.kind, meanOfSessionValues(p, key, model))
           : DASH}</td>
         <td class="spark-cell"></td>`;
       tr.querySelector('.spark-cell').append(

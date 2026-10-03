@@ -118,6 +118,10 @@ export function monthSeries(events, ctx, { hall = 'combined' } = {}) {
       gross: 0,
       payout: 0,
       attendance: 0,
+      // RPA uses only sessions that recorded attendance, so a session with
+      // sales but no head count cannot inflate it (same rule as session-model).
+      attendedGross: 0,
+      missingAttendance: 0,
       categories: new Map(),
       // Raw per-metric sums. The Monthly sheet shows one row per metric, so a
       // category rollup alone is not enough.
@@ -127,7 +131,12 @@ export function monthSeries(events, ctx, { hall = 'combined' } = {}) {
     m.eventCount += 1;
     m.gross += t.revenue;
     m.payout += t.payout;
-    m.attendance += t.attendance ?? 0;
+    if (t.attendance !== null && t.attendance > 0) {
+      m.attendance += t.attendance;
+      m.attendedGross += t.revenue;
+    } else {
+      m.missingAttendance += 1;
+    }
 
     const raw = metricsFor(e.id, ctx.metrics, ctx.idx);
     for (const [k, v] of Object.entries(raw ?? {})) {
@@ -155,7 +164,7 @@ export function monthSeries(events, ctx, { hall = 'combined' } = {}) {
         net,
         // Guarded: a month with no sales has NO margin, not a margin of zero.
         margin: m.gross > 0 ? net / m.gross : null,
-        rpa: m.attendance > 0 ? m.gross / m.attendance : null,
+        rpa: m.attendance > 0 ? m.attendedGross / m.attendance : null,
         categoryList: [...m.categories.values()],
         uncategorised: null,     // filled by the caller that knows the total
       };

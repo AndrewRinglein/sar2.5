@@ -25,7 +25,7 @@ import {
 import {
   metricsFor, sessionTotals, getMetric, jackpotParticipation,
 } from '../lib/model.js';
-import { usd, usdShort, pct, int, pctDelta, esc, DASH } from '../lib/fmt.js';
+import { usd, usdShort, pct, int, pctDelta, esc, DASH, hallToday } from '../lib/fmt.js';
 import { play } from '../lib/sound.js';
 
 const h = (tag, cls, html) => {
@@ -100,16 +100,20 @@ export function twelveMonths(rows, { labels = true } = {}) {
    2 — Year over Year. DESIGN §4.2
 --------------------------------------------------------------------------- */
 
-/** Months that have a same-month counterpart a year earlier. */
-export function yoyPairs(rows) {
+/**
+ * Months that have a same-month counterpart a year earlier. The month still
+ * in progress is left out: a few days of October against all of last October
+ * reads as a collapse that has not happened.
+ */
+export function yoyPairs(rows, { current = hallToday().slice(0, 7) } = {}) {
   const byKey = new Map(rows.map((r) => [r.key, r]));
-  return lastMonths(rows, MONTHS_BACK)
+  return lastMonths(rows.filter((r) => r.key < current), MONTHS_BACK)
     .map((cur) => ({ cur, prior: byKey.get(priorYearKey(cur.key)) }))
     .filter((p) => p.prior);
 }
 
-export function yearOverYear(rows, { labels = true } = {}) {
-  const pairs = yoyPairs(rows);
+export function yearOverYear(rows, { labels = true, current } = {}) {
+  const pairs = yoyPairs(rows, current ? { current } : {});
   const f = frame({ height: 320 });
   const svg = svgEl('svg', { viewBox: `0 0 ${f.width} ${f.height}`, class: 'ch' });
   if (!pairs.length) return { svg, pairs, empty: true };
@@ -193,7 +197,7 @@ export function yoyTotals(pairs) {
 
 /** Display year: this year if it has data, else last year, and say so. */
 export function ytdYear(rows, now = new Date()) {
-  const thisYear = now.getUTCFullYear();
+  const thisYear = Number(hallToday(now).slice(0, 4));
   const has = (y) => rows.some((r) => r.year === y);
   if (has(thisYear)) return { year: thisYear, fellBack: false };
   return { year: thisYear - 1, fellBack: has(thisYear - 1) };
@@ -253,7 +257,7 @@ export function ytd(rows, { now = new Date(), labels = true } = {}) {
  */
 export function jackpotWindow(data, { hall = 'combined', days = JACKPOT_DAYS, now = new Date() } = {}) {
   const jackpots = data.config?.settings?.jackpots ?? [];
-  const cutoff = new Date(now.getTime() - days * 86400000).toISOString().slice(0, 10);
+  const cutoff = new Date(Date.parse(`${hallToday(now)}T00:00:00Z`) - days * 86400000).toISOString().slice(0, 10);
 
   const rows = data.events
     .filter((e) => e.event_date >= cutoff && hallMatches(hall, e.location_id))
@@ -272,7 +276,7 @@ export function jackpotWindow(data, { hall = 'combined', days = JACKPOT_DAYS, no
           // Reused from model.js (SPEC §17), not rewritten: players =
           // (balance - collected) / participation cost, null when no cost is
           // configured. SAR 1.0 returns 0 and draws a flat line along zero.
-          players: jackpotParticipation(m, jp, t.attendance),
+          players: jackpotParticipation(m, jp, t.attendance).players,
         })),
       };
     });
@@ -405,8 +409,8 @@ export function productNet(rows, categories, { hidden = {}, labels = true } = {}
       const stack = stacks[i].up + stacks[i].down;
       svg.append(withTitle(svgEl('circle', { cx: pts[i].x, cy: pts[i].y, r: 3, class: 'ch-dot ch-net' }),
         `Net (all products): ${usd(m.net)} (${monthFull(m.key)})`
-        + `\nCategories shown: ${usd(stack)}`
-        + `\nUncategorised: ${usd(m.net - stack)}`));
+        + (Math.round(m.net - stack) !== 0
+          ? `\nCategories shown: ${usd(stack)}\nHidden categories: ${usd(m.net - stack)}` : '')));
     });
   }
 
@@ -577,7 +581,7 @@ export function renderDashboard({ data, params, onNavigate, setInspectorContent 
           <span class="kpi-sub">${t.margin.points === null ? DASH
             : `${(t.margin.points * 100).toFixed(1)} pts`} vs prior year</span></div>`));
       panel.append(r.svg);
-      note = `${r.pairs.length} months with a prior-year match.`;
+      note = `${r.pairs.length} complete months with a prior-year match; the month in progress is left out.`;
     }
     panel.append(legend([
       { key: 'pg', label: 'Prior gross', colour: SERIES.prior },

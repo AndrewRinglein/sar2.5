@@ -20,7 +20,7 @@
    neverScheduled) back the "Who can cover" tab and are kept exported.
    ========================================================================== */
 
-import { int, pct, usd, usd2, dateShort, esc, DASH } from '../lib/fmt.js';
+import { int, pct, usd, usd2, dateShort, esc, DASH, hallToday } from '../lib/fmt.js';
 import { play } from '../lib/sound.js';
 import { resolveHalls } from '../lib/managers.js';
 import { sessionRows } from './commission.js';
@@ -452,7 +452,7 @@ function renderOverview(root, data, sched, params, go) {
     root.append(head);
     return;
   }
-  const today = new Date().toISOString().slice(0, 10);
+  const today = hallToday();
   const todays = payPeriod(today);
   const usingDefault = !params.period;
   head.append(h('p', 'so-facts', `

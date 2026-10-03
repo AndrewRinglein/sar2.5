@@ -534,7 +534,7 @@ function renderBand(ev, ctx) {
   const panel = h('section', 'panel sd-band');
   const head = h('div', 'sd-panel-head');
   head.append(h('h3', 'panel-title', 'Net vs expected range'),
-    h('span', 'dim sd-sub', `last 30 ${weekday(ev.event_date)} ${esc(sessionType(ev.event_type).toLowerCase())} sessions · band = 95% of the 12 before each`));
+    h('span', 'dim sd-sub', `last 30 ${weekday(ev.event_date)} ${esc(sessionType(ev.event_type).toLowerCase())} sessions · band = 95% prediction range from the 12 before each`));
   panel.append(head);
 
   const rows = expectedBand(slotSeries(ev, ctx));

@@ -157,3 +157,20 @@ export function esc(v) {
 }
 
 export { DASH };
+
+/**
+ * Today's date at the halls (YYYY-MM-DD), not in UTC. After 5 pm Pacific the
+ * UTC date is already tomorrow, which used to roll "this month" over a day
+ * early on the last evening of every month.
+ */
+export const HALL_TIME_ZONE = 'America/Los_Angeles';
+export function hallToday(now = new Date(), timeZone = HALL_TIME_ZONE) {
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+    }).formatToParts(now);
+    const get = (k) => parts.find((p) => p.type === k)?.value;
+    if (get('year') && get('month') && get('day')) return `${get('year')}-${get('month')}-${get('day')}`;
+  } catch { /* unknown zone: UTC below */ }
+  return now.toISOString().slice(0, 10);
+}

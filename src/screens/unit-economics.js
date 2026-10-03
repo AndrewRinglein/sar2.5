@@ -27,6 +27,9 @@
 import { metricsFor, sessionTotals } from '../lib/model.js';
 import { monthSeries, hallMatches } from '../lib/charts.js';
 import { usd, usd2, pct, int, esc, DASH } from '../lib/fmt.js';
+import { actualHours } from '../lib/staff-model.js';
+import { joinSessions } from '../lib/managers.js';
+import { hallMapFromLocations } from '../lib/forecast-model.js';
 import { play } from '../lib/sound.js';
 
 const h = (tag, cls, html) => {
@@ -156,21 +159,29 @@ export function sessionEconomics(event, ctx, { assumptions, cogs = new Map(), ho
 }
 
 /** Hours per session from the time clock, where the entry names a session. */
-export function hoursBySession(timeEntries = [], sessions = []) {
-  const dateOf = new Map(sessions.map((s) => [s.id, s.session_date]));
+export function hoursBySession(timeEntries = [], sessions = [], assignments = []) {
+  // Hours per SCHEDULER SESSION, not per date: keyed by date, every hall's
+  // and every part's hours that day were charged to whichever session was
+  // open. Only real worked time counts — null hours, zero-hour test punches
+  // and PTO are "not recorded" (actualHours), never a real 0.
+  const sessionOfAssignment = new Map(assignments.map((a) => [a.id, a.session_id]));
+  const perHallDay = new Map();
+  for (const s of sessions) {
+    const k = `${s.hall_id}|${s.session_date}`;
+    perHallDay.set(k, [...(perHallDay.get(k) ?? []), s.id]);
+  }
   const by = new Map();
   for (const e of timeEntries) {
-    // `Number(null)` is 0 and passes `Number.isFinite`, so an unrecorded shift
-    // used to arrive as a real zero — which then bypassed the `hours ?? default`
-    // fallback (0 ?? x is 0), priced the staff line at $0, and labelled it
-    // "0.0 hours from the time clock" as though it were verified. Third time
-    // this trap has appeared; guarded explicitly.
-    if (e.hours_worked === null || e.hours_worked === undefined || e.hours_worked === '') continue;
-    const n = Number(e.hours_worked);
-    if (!Number.isFinite(n)) continue;
-    const key = e.work_date ?? dateOf.get(e.session_id) ?? null;
-    if (!key) continue;
-    by.set(key, (by.get(key) ?? 0) + n);
+    const n = actualHours(e);
+    if (n === null) continue;
+    let sid = e.assignment_id ? sessionOfAssignment.get(e.assignment_id) ?? null : null;
+    if (!sid) {
+      // No assignment: attributable only when its hall ran one session that day.
+      const only = perHallDay.get(`${e.hall_id}|${e.work_date}`) ?? [];
+      if (only.length === 1) [sid] = only;
+    }
+    if (!sid) continue;
+    by.set(sid, (by.get(sid) ?? 0) + n);
   }
   return by;
 }
@@ -185,7 +196,9 @@ export function renderUnitEconomics({ data, params, onNavigate, setInspectorCont
   const assumptions = loadAssumptions();
   const sched = data.schedule;
   const cogs = costOfGoods(sched?.boxes ?? []);
-  const hoursByDate = hoursBySession(sched?.timeEntries ?? [], sched?.sessions ?? []);
+  const hoursOf = hoursBySession(sched?.timeEntries ?? [], sched?.sessions ?? [], sched?.assignments ?? []);
+  const { links } = joinSessions(sched?.sessions ?? [], data.events,
+    hallMapFromLocations(data.locations ?? []).map);
 
   const bar = h('div', 'filter-bar');
   for (const l of [{ id: 'all', name: 'Both halls' }, ...data.locations]) {
@@ -207,7 +220,7 @@ export function renderUnitEconomics({ data, params, onNavigate, setInspectorCont
   }
 
   const econ = sessionEconomics(selected, data, {
-    assumptions, cogs, hours: hoursByDate.get(selected.event_date) ?? null,
+    assumptions, cogs, hours: hoursOf.get(links.get(selected.id)) ?? null,
   });
 
   /* ---- assumptions panel ---- */

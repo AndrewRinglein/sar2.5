@@ -273,6 +273,18 @@ test('an org-wide pot dedupes balances by date but not payouts', () => {
   assert.equal(hist.payouts.length, 1, 'the single payout is kept');
 });
 
+test('an org-wide payout recorded at both halls counts once', () => {
+  const events = [
+    { id: 'a', event_date: '2026-08-01', location_id: 'L1' },
+    { id: 'b', event_date: '2026-08-01', location_id: 'L2' },
+  ];
+  const metrics = {
+    a: { mega_hotball_total: 500000, mega_hotball_payout: 120000 },
+    b: { mega_hotball_total: 500000, mega_hotball_payout: 120000 },
+  };
+  assert.deepEqual(jackpotHistory(events, (e) => metrics[e.id], MEGA).payouts, [120000]);
+});
+
 test('a per-location pot does not dedupe', () => {
   const events = [
     { id: 'a', event_date: '2026-08-01', location_id: 'L1' },

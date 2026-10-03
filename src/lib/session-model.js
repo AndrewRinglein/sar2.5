@@ -15,8 +15,8 @@
    ========================================================================== */
 
 import {
-  metricsFor, getMetric, sessionTotals, comparisonPool, mean, median, percentile,
-  zScore, delta, jackpotBucket, MIN_POOL,
+  metricsFor, getMetric, sessionTotals, comparisonPool, mean,
+  zScore, delta, jackpotBucket, MIN_POOL, predictionInterval,
 } from './model.js';
 import { usd, usd2, pct, int, weekday, sessionType } from './fmt.js';
 
@@ -394,11 +394,12 @@ export const BAND_LOOKBACK = 12;
  * For each of the last `window` points, the expected value and 95% range from
  * the `lookback` sessions BEFORE it on the same slot.
  *
- * The v9 mockup used mean ± 1.96σ over 8 points, and invented a ±12% band
- * when history was short. Here the band IS the 2.5th–97.5th percentile of
- * recent history (model.percentile) and the expectation its median — no
- * normality assumed of a series that has jackpot spikes in it — and a point
- * with fewer than MIN_POOL prior sessions gets no band at all.
+ * The range is a 95% PREDICTION interval (model.predictionInterval): the
+ * mean of those sessions ± t·s·√(1+1/n). It used to be their 2.5th–97.5th
+ * percentiles, which with 12 points is just their min and max: measured on
+ * every Vanguard slot (2 Oct 2026, 762 nights) that held the next night only
+ * 81% of the time while being labelled 95%. The prediction interval held 93%.
+ * A point with fewer than MIN_POOL prior sessions gets no band at all.
  *
  * `series`: [{ id, date, value }] oldest first, ending with the target.
  */
@@ -408,13 +409,14 @@ export function expectedBand(series, { window = BAND_WINDOW, lookback = BAND_LOO
   for (let g = startAt; g < series.length; g += 1) {
     const prior = series.slice(Math.max(0, g - lookback), g)
       .map((s) => s.value).filter((v) => v !== null && Number.isFinite(v));
-    const has = prior.length >= min;
+    const pi = prior.length >= min ? predictionInterval(prior) : null;
+    const has = pi !== null;
     const row = {
       ...series[g],
       n: prior.length,
-      expected: has ? median(prior) : null,
-      lo: has ? percentile(prior, 0.025) : null,
-      hi: has ? percentile(prior, 0.975) : null,
+      expected: has ? pi.mean : null,
+      lo: has ? pi.lo : null,
+      hi: has ? pi.hi : null,
     };
     row.inside = has && row.value !== null ? row.value >= row.lo && row.value <= row.hi : null;
     out.push(row);

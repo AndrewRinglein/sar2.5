@@ -216,13 +216,15 @@ export const classifyDays = classifyWeek;
    Break compliance — §22.1.5, reproduced exactly
 --------------------------------------------------------------------------- */
 
-/** 10 paid minutes per 4 hours "or major fraction thereof". */
+/**
+ * 10 paid minutes per 4 hours "or major fraction thereof" (more than 2 h),
+ * none when the day's work is LESS than 3½ hours. So exactly 3.5 h owes one,
+ * and the table keeps going past 14 h: 18 h owes 4, 18.01 h owes 5.
+ */
 export function restRequired(h) {
-  if (h <= 3.5) return 0;
-  if (h <= 6) return 1;
-  if (h <= 10) return 2;
-  if (h <= 14) return 3;
-  return 4;
+  if (!(h >= 3.5)) return 0;
+  const whole = Math.floor(h / 4);
+  return Math.max(1, whole + (h - whole * 4 > 2 ? 1 : 0));
 }
 
 export const mealRequired = (h) => (h > 10 ? 2 : h > 5 ? 1 : 0);
@@ -239,8 +241,13 @@ export function actualHours(e = {}) {
   return h === null || h <= 0 ? null : h;
 }
 
-/** Hours from clock-in to the start of the meal, or null when either is missing. */
+/**
+ * Hours WORKED before the meal started, or null when unknown. A merged
+ * workday carries it precomputed (see mergeWorkday); a single entry measures
+ * from its own clock-in.
+ */
 export function mealOffset(e = {}) {
+  if (e.meal_offset_hours !== undefined) return e.meal_offset_hours;
   if (!e.clock_in || !e.meal_start) return null;
   const a = Date.parse(e.clock_in); const b = Date.parse(e.meal_start);
   if (!Number.isFinite(a) || !Number.isFinite(b) || b < a) return null;
@@ -309,27 +316,74 @@ export function premiumFor(violations = []) {
 }
 
 /**
- * Group entries into person-days and apply the cap across them: two entries on
- * one day (two halls) still owe at most one meal and one rest premium hour.
+ * Several entries on one workday (two halls, or a split shift) as the ONE day
+ * the break rules are written for. What is owed depends on the day's total
+ * hours: two 3-hour entries are a 6-hour day that owes a meal, which checking
+ * each entry alone never found.
+ *
+ *   hours      summed
+ *   rest taken summed; unknown if any entry's count is unknown
+ *   meal       taken if any entry took one; a second meal if two entries did,
+ *              or any entry records a second meal
+ *   meal time  hours worked before the first meal: the whole of every entry
+ *              that started earlier, plus the time into the meal's own entry
+ */
+export function mergeWorkday(entries = []) {
+  const worked = entries.filter((e) => actualHours(e) !== null)
+    .sort((a, b) => String(a.clock_in ?? '').localeCompare(String(b.clock_in ?? '')));
+  if (worked.length <= 1) return worked[0] ?? null;
+  const hours = worked.reduce((t, e) => t + actualHours(e), 0);
+  const rests = worked.map((e) => num(e.rest_breaks_taken));
+  const meals = worked.filter((e) => e.meal_taken === true);
+  let offset = null;
+  if (meals.length) {
+    const first = meals.find((e) => mealOffset(e) !== null);
+    if (first && worked.every((e) => e.clock_in)) {
+      offset = worked.filter((e) => e.clock_in < first.clock_in)
+        .reduce((t, e) => t + actualHours(e), 0) + mealOffset(first);
+    }
+  }
+  return {
+    ...worked[0],
+    id: worked[0].id ?? null,
+    hours_worked: hours,
+    rest_breaks_taken: rests.some((r) => r === null) ? null : rests.reduce((t, r) => t + r, 0),
+    meal_taken: meals.length > 0,
+    meal_waived: meals.length === 0 && worked.some((e) => e.meal_waived === true),
+    meal_offset_hours: meals.length ? offset : undefined,
+    second_meal_taken: meals.length >= 2 || worked.some((e) => e.second_meal_taken === true),
+    second_meal_waived: worked.some((e) => e.second_meal_waived === true),
+  };
+}
+
+/**
+ * Group entries into person-days and judge each DAY: requirements come from
+ * the day's total hours, and the premium caps at one meal and one rest hour.
  */
 export function complianceDays(entries = []) {
   const by = new Map();
   for (const e of entries) {
-    const r = checkDay(e);
-    if (!r.recorded) continue;
+    if (actualHours(e) === null) continue;
     const k = `${e.staff_id}|${e.work_date}`;
-    const cur = by.get(k) ?? { staffId: e.staff_id, date: e.work_date, halls: new Set(),
-      hours: 0, violations: [], mealTimingUnknown: 0, restUnknown: 0, entries: [] };
-    cur.hours += r.hours;
-    if (e.hall_id) cur.halls.add(e.hall_id);
-    for (const v of r.violations) cur.violations.push({ ...v, hall: e.hall_id ?? null, entryId: e.id ?? null });
-    if (r.mealTimingUnknown) cur.mealTimingUnknown += 1;
-    if (r.restUnknown) cur.restUnknown += 1;
+    const cur = by.get(k) ?? { staffId: e.staff_id, date: e.work_date, entries: [] };
     cur.entries.push(e);
     by.set(k, cur);
   }
-  return [...by.values()].map((d) => ({ ...d, halls: [...d.halls],
-    premiumHours: premiumFor(d.violations), outOfCompliance: d.violations.length > 0 }));
+  return [...by.values()].map((d) => {
+    const day = mergeWorkday(d.entries);
+    const r = checkDay(day);
+    const halls = [...new Set(d.entries.map((e) => e.hall_id).filter(Boolean))];
+    const hall = halls.length === 1 ? halls[0] : null;
+    const violations = r.violations.map((v) => ({ ...v, hall, entryId: d.entries[0].id ?? null }));
+    return {
+      staffId: d.staffId, date: d.date, halls, hours: r.hours, entries: d.entries,
+      violations,
+      mealTimingUnknown: r.mealTimingUnknown ? 1 : 0,
+      restUnknown: r.restUnknown ? 1 : 0,
+      premiumHours: premiumFor(violations),
+      outOfCompliance: violations.length > 0,
+    };
+  });
 }
 
 /* ---------------------------------------------------------------------------

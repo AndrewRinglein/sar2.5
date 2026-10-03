@@ -16,7 +16,7 @@
    ========================================================================== */
 
 import { metricsFor, sessionTotals, delta } from '../lib/model.js';
-import { usd, usdShort, pct, pctDelta, int, arrow, monthLabel, esc, DASH } from '../lib/fmt.js';
+import { usd, usdShort, pct, pctDelta, int, arrow, monthLabel, esc, DASH, hallToday } from '../lib/fmt.js';
 
 const h = (tag, cls, html) => {
   const el = document.createElement(tag);
@@ -27,7 +27,7 @@ const h = (tag, cls, html) => {
 
 /** Group sessions into months, flagging the one still in progress. */
 export function monthlyRollup(events, metrics, idx, categories, { hall = 'all', today = null } = {}) {
-  const now = today ?? new Date().toISOString().slice(0, 10);
+  const now = today ?? hallToday();
   const currentMonth = now.slice(0, 7);
   const byMonth = new Map();
 
@@ -36,14 +36,18 @@ export function monthlyRollup(events, metrics, idx, categories, { hall = 'all', 
     const key = e.event_date.slice(0, 7);
     const t = sessionTotals(metricsFor(e.id, metrics, idx), categories);
     const m = byMonth.get(key) ?? {
-      month: key, sessions: 0, revenue: 0, payout: 0, net: 0, attendance: 0,
+      month: key, sessions: 0, revenue: 0, payout: 0, net: 0, attendance: 0, attendedRevenue: 0,
       byCategory: new Map(), partial: key === currentMonth,
     };
     m.sessions += 1;
     m.revenue += t.revenue;
     m.payout += t.payout;
     m.net += t.net;
-    m.attendance += t.attendance ?? 0;
+    // RPA from sessions that recorded attendance only (session-model's rule).
+    if (t.attendance !== null && t.attendance > 0) {
+      m.attendance += t.attendance;
+      m.attendedRevenue += t.revenue;
+    }
     for (const c of t.categories) {
       const cur = m.byCategory.get(c.key) ?? { key: c.key, name: c.name, revenue: 0, payout: 0, net: 0 };
       cur.revenue += c.revenue; cur.payout += c.payout; cur.net += c.net;
@@ -57,7 +61,7 @@ export function monthlyRollup(events, metrics, idx, categories, { hall = 'all', 
       ...m,
       categories: [...m.byCategory.values()],
       margin: m.revenue > 0 ? m.net / m.revenue : null,
-      rpa: m.attendance > 0 ? m.revenue / m.attendance : null,
+      rpa: m.attendance > 0 ? m.attendedRevenue / m.attendance : null,
     }))
     .sort((a, b) => (a.month < b.month ? 1 : -1));      // newest first
 }

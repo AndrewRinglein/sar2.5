@@ -689,7 +689,8 @@ export function daySlots(events, valueOf, { windowDays = SLOT_WINDOW_DAYS, now =
       mean,
       sd,
       index: overall.mean ? mean / overall.mean : null,
-      cv: mean ? sd / mean : null,
+      // One session has no spread to measure: null, not a perfect 0%.
+      cv: mean && sd !== null ? sd / mean : null,
     };
   }).sort((a, b) => (b.index ?? 0) - (a.index ?? 0));
 }

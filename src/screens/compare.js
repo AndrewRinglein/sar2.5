@@ -339,8 +339,16 @@ export function pctChange(A, B) {
 export function testMetric(A, B) {
   const r = welchT(A.values, B.values, { min: MIN_SESSIONS });
   if (!r.enough && r.reason === 'no variance') {
-    // Both sides flat. SAR 1.0 reports t = 0, p = 1, d = 0 here, and so do we:
-    // two groups of identical numbers are not "insufficient", they are equal.
+    // Both sides flat. Equal flat groups are equal: t = 0, p = 1, d = 0, as in
+    // SAR 1.0. But two flat groups at DIFFERENT levels (every A night 5, every
+    // B night 7) differ with certainty — reporting p = 1 called them equal.
+    // Cohen's d is unbounded there, so it is shown as a dash, effect "large".
+    const meanA = A.values.reduce((t, v) => t + v, 0) / A.values.length;
+    const meanB = B.values.reduce((t, v) => t + v, 0) / B.values.length;
+    if (meanA !== meanB) {
+      return { enough: true, t: null, df: A.n + B.n - 2, p: 0, d: null,
+               sig: significance(0), eff: 'large' };
+    }
     return { enough: true, t: 0, df: A.n + B.n - 2, p: 1, d: 0,
              sig: 'none', eff: 'negligible' };
   }

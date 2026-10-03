@@ -195,7 +195,10 @@ const entry = (o) => ({ staff_id: 'p', work_date: MON, hall_id: 'sc', is_worked_
   second_meal_waived: false, rest_breaks_taken: 4, ...o });
 
 test('rest table edges', () => {
-  for (const [h, n] of [[3.5, 0], [3.51, 1], [6, 1], [6.01, 2], [10, 2], [10.01, 3], [14, 3], [14.01, 4]]) {
+  // None below 3½ hours; at 3½ exactly, one. Every further 4 hours or major
+  // fraction (more than 2) adds one, with no ceiling at 14.
+  for (const [h, n] of [[3.49, 0], [3.5, 1], [3.51, 1], [6, 1], [6.01, 2], [10, 2], [10.01, 3],
+    [14, 3], [14.01, 4], [18, 4], [18.01, 5], [22, 5], [22.01, 6]]) {
     assert.equal(restRequired(h), n, `${h}h`);
   }
 });
@@ -258,6 +261,33 @@ test('null hours are not 0 hours, and a zero-hour test punch is ignored', () => 
   assert.equal(actualHours(entry({ hours_worked: '7', category: 'pto', is_worked_time: false })), null);
   assert.equal(checkDay(entry({ hours_worked: '0.00' })).recorded, false);
   assert.deepEqual(complianceDays([entry({ hours_worked: null }), entry({ hours_worked: '0' })]), []);
+});
+
+test('breaks are judged on the whole workday, not each entry', () => {
+  // Two 3-hour entries at two halls: neither alone owes a meal, the 6-hour day does.
+  const split = complianceDays([
+    entry({ id: 'a', hours_worked: '3', rest_breaks_taken: 1, clock_in: '2026-08-03T16:00:00Z' }),
+    entry({ id: 'b', hall_id: 'rwc', hours_worked: '3', rest_breaks_taken: 0, clock_in: '2026-08-03T20:00:00Z' }),
+  ]);
+  assert.equal(split.length, 1);
+  assert.equal(split[0].hours, 6);
+  assert.deepEqual(split[0].violations.map((v) => `${v.kind}:${v.type}`), ['meal:not_taken']);
+  assert.equal(split[0].violations[0].hall, null, 'a two-hall day names no single hall');
+
+  // The meal is timed in hours WORKED: 4 h at the first hall, then 1.5 h into
+  // the second entry is 5.5 h of work, so late — even though it is on time
+  // measured from the second entry's own clock-in.
+  const late = complianceDays([
+    entry({ id: 'a', hours_worked: '4', clock_in: '2026-08-03T15:00:00Z' }),
+    entry({ id: 'b', hall_id: 'rwc', hours_worked: '4', meal_taken: true,
+      clock_in: '2026-08-03T20:00:00Z', meal_start: '2026-08-03T21:30:00Z' }),
+  ]);
+  assert.deepEqual(late[0].violations.map((v) => `${v.kind}:${v.type}`), ['meal:taken_late']);
+
+  // A single entry is judged exactly as before.
+  const one = complianceDays([entry({ hours_worked: '8', meal_taken: true,
+    clock_in: '2026-08-03T17:00:00Z', meal_start: '2026-08-03T21:00:00Z' })]);
+  assert.deepEqual(one[0].violations, []);
 });
 
 /* ===========================================================================

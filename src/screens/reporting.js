@@ -20,7 +20,7 @@
    ========================================================================== */
 
 import { metricsFor, sessionTotals, getMetric, maxAttendanceFor } from '../lib/model.js';
-import { usd, usd2, pct, int, monthLabel, esc, DASH } from '../lib/fmt.js';
+import { usd, usd2, pct, int, monthLabel, esc, DASH, hallToday } from '../lib/fmt.js';
 import { play } from '../lib/sound.js';
 
 const h = (tag, cls, html) => {
@@ -47,6 +47,9 @@ export function periodMetrics(events, ctx) {
   const m = {
     eventCount: events.length,
     totalSales: 0, totalPayouts: 0, attendance: 0, totalCapacity: 0,
+    // Per-attendee figures use only sessions that recorded attendance, so a
+    // session with sales but no head count cannot inflate them.
+    attendedSales: 0, attendedNet: 0, attendedEvents: 0,
     categories: new Map(),
   };
 
@@ -54,8 +57,13 @@ export function periodMetrics(events, ctx) {
     const t = sessionTotals(metricsFor(e.id, ctx.metrics, ctx.idx), ctx.categories);
     m.totalSales += t.revenue;
     m.totalPayouts += t.payout;
-    m.attendance += t.attendance ?? 0;
-    m.totalCapacity += maxAttendanceFor(e.location_id, ctx.locations);
+    if (t.attendance !== null && t.attendance > 0) {
+      m.attendance += t.attendance;
+      m.attendedSales += t.revenue;
+      m.attendedNet += t.revenue - t.payout;
+      m.attendedEvents += 1;
+      m.totalCapacity += maxAttendanceFor(e.location_id, ctx.locations);
+    }
     for (const c of t.categories) {
       const cur = m.categories.get(c.key)
         ?? { key: c.key, name: c.name, revenue: 0, payout: 0,
@@ -70,13 +78,13 @@ export function periodMetrics(events, ctx) {
   // Every derived figure returns null rather than dividing by zero. SAR 1.0
   // renders $NaN for a month with no sessions; a dash is the honest answer.
   m.margin = m.totalSales > 0 ? m.netSales / m.totalSales : null;
-  m.rpa = m.attendance > 0 ? m.totalSales / m.attendance : null;
+  m.rpa = m.attendance > 0 ? m.attendedSales / m.attendance : null;
   m.attendancePercent = m.totalCapacity > 0 ? m.attendance / m.totalCapacity : null;
   m.salesPerEvent = m.eventCount > 0 ? m.totalSales / m.eventCount : null;
   m.payoutsPerEvent = m.eventCount > 0 ? m.totalPayouts / m.eventCount : null;
   m.profitPerEvent = m.eventCount > 0 ? m.netSales / m.eventCount : null;
-  m.attendancePerEvent = m.eventCount > 0 ? m.attendance / m.eventCount : null;
-  m.netPerAttendee = m.attendance > 0 ? m.netSales / m.attendance : null;
+  m.attendancePerEvent = m.attendedEvents > 0 ? m.attendance / m.attendedEvents : null;
+  m.netPerAttendee = m.attendance > 0 ? m.attendedNet / m.attendance : null;
   m.payoutRatio = m.totalSales > 0 ? m.totalPayouts / m.totalSales : null;
   // "Daily average" in SAR 1.0 divides by a flat 30, not by days elapsed.
   m.dailyNet = m.netSales / 30;
@@ -105,9 +113,7 @@ export function buildPeriods(events, ctx, { hall = 'all', mode = 'monthly' } = {
   }
 
   const nowKey = (() => {
-    const d = new Date();
-    const y = d.getUTCFullYear();
-    const mo = d.getUTCMonth() + 1;
+    const [y, mo] = hallToday().split('-').map(Number);
     return mode === 'quarterly'
       ? `${y}-Q${Math.floor((mo - 1) / 3) + 1}`
       : `${y}-${String(mo).padStart(2, '0')}`;

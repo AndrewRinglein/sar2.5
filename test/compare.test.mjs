@@ -387,6 +387,15 @@ test('two flat cohorts report p = 1 and d = 0, as SAR 1.0 does — equal is not 
   assert.equal(SIGNIFICANCE_LABELS[t.sig], 'Not Significant');
 });
 
+test('two flat cohorts at different levels differ with certainty, not p = 1', () => {
+  const t = testMetric(cohortStats([5, 5, 5]), cohortStats([7, 7, 7, 7]));
+  assert.equal(t.enough, true);
+  assert.equal(t.p, 0);
+  assert.equal(t.d, null, 'Cohen\'s d is unbounded, shown as a dash');
+  assert.equal(t.eff, 'large');
+  assert.notEqual(SIGNIFICANCE_LABELS[t.sig], 'Not Significant');
+});
+
 test('a missing metric is left out of the cohort, not counted as zero', () => {
   const data = handChecked();
   delete data.metrics.a0[byKey.attendance];

@@ -12,7 +12,7 @@ import { JSDOM } from 'jsdom';
 
 import { renderSession } from '../src/screens/session.js';
 import {
-  indexMetrics, metricsFor, sessionTotals, comparisonPool, percentile, median, mean, MIN_POOL,
+  indexMetrics, metricsFor, sessionTotals, comparisonPool, percentile, median, mean, MIN_POOL, predictionInterval,
   jackpotBucket, jackpotMatches,
 } from '../src/lib/model.js';
 import {
@@ -562,7 +562,7 @@ test('findings: a small pool leads with a gate and nothing is called a flag', ()
   assert.match(gate.textContent, /SAMPLE/);
 });
 
-test('expected band: median and 2.5th–97.5th percentiles of the 12 sessions before each point', () => {
+test('expected band: a 95% prediction interval from the 12 sessions before each point', () => {
   const series = Array.from({ length: 40 }, (_, i) => ({ id: `s${i}`, date: shift('2026-01-01', 7 * i), value: 100000 + Math.round(20000 * wob(i, 7)) }));
   const rows = expectedBand(series);
   assert.equal(rows.length, 30);
@@ -570,9 +570,12 @@ test('expected band: median and 2.5th–97.5th percentiles of the 12 sessions be
   rows.forEach((r) => {
     const g = series.findIndex((s) => s.id === r.id);
     const prior = series.slice(Math.max(0, g - 12), g).map((s) => s.value);
-    assert.equal(r.lo, percentile(prior, 0.025));
-    assert.equal(r.hi, percentile(prior, 0.975));
-    assert.equal(r.expected, median(prior));
+    const pi = predictionInterval(prior);
+    assert.equal(r.lo, pi.lo);
+    assert.equal(r.hi, pi.hi);
+    assert.equal(r.expected, pi.mean);
+    // wider than the sample's own spread: a single new night varies more than that
+    assert.ok(r.lo <= Math.min(...prior) || r.hi >= Math.max(...prior));
     assert.equal(r.inside, r.value >= r.lo && r.value <= r.hi);
   });
   // too little history: no band rather than an invented one

@@ -66,24 +66,32 @@ function jackpotCard(jp, ctx, hallId) {
     : chron.filter((e) => e.location_id === hallId);
 
   const { payouts, balances } = jackpotHistory(scoped, metricsOf, jp);
-  const cap = jackpotCap(payouts, balances, { fallback: jp.cap ?? null });
+  // The config's cap is in DOLLARS (Hotball 5000, Mega 15000); metrics are cents.
+  const cap = jackpotCap(payouts, balances, { fallback: jp.cap ? jp.cap * 100 : null });
   const max = jackpotMaxPayout(payouts);
 
-  // One row per session, deduped by date for an org-wide pot so a shared
-  // balance is not plotted twice.
-  const seen = new Set();
+  // One row per session; for an org-wide pot, one row per DATE, merged across
+  // halls. Keeping only the first hall's row lost a hit recorded at the other.
+  const byDate = new Map();
   const series = [];
   for (const e of scoped) {
-    if (jp.scope === 'org_wide') {
-      if (seen.has(e.event_date)) continue;
-      seen.add(e.event_date);
-    }
     const m = metricsOf(e);
-    series.push({
+    const row = {
       date: e.event_date,
       balance: getMetric(m, jp.balanceKey) ?? 0,
       payout: Math.abs(getMetric(m, jp.paidKey) ?? 0),
-    });
+    };
+    if (jp.scope === 'org_wide') {
+      const prev = byDate.get(e.event_date);
+      if (prev) {
+        // The same shared pot seen from both halls: the larger reading of each.
+        prev.balance = Math.max(prev.balance, row.balance);
+        prev.payout = Math.max(prev.payout, row.payout);
+        continue;
+      }
+      byDate.set(e.event_date, row);
+    }
+    series.push(row);
   }
 
   // Mark hits, guarding against a payout recorded before any pot existed.

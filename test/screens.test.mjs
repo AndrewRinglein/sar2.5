@@ -1035,6 +1035,35 @@ test('year over year keeps only months with a prior-year match', () => {
   }
 });
 
+test('year over year leaves out the month still in progress', () => {
+  const d = withMonths();
+  const rows = monthSeries(d.events, d);
+  const last = rows[rows.length - 1].key;
+  const withIt = yoyPairs(rows, { current: '9999-12' });
+  const without = yoyPairs(rows, { current: last });
+  assert.ok(withIt.some((p) => p.cur.key === last) || !withIt.length);
+  assert.ok(!without.some((p) => p.cur.key === last), 'the current month is not compared');
+});
+
+test('monthly RPA ignores sessions with no attendance recorded', () => {
+  const d = makeData();
+  const rows = monthSeries(d.events, d);
+  const before = rows.map((r) => r.rpa);
+  // Blank the attendance of one session: RPA must not rise because its sales
+  // stay in while its head count drops out.
+  const e = d.events[0];
+  const saved = e.attendance; e.attendance = null;
+  for (const k of Object.keys(d.metrics[e.id] ?? {})) {
+    const def = d.metricDefs?.find?.((m) => m.id === k);
+    if (def && /attendance/i.test(def.key)) d.metrics[e.id][k] = null;
+  }
+  const after = monthSeries(d.events, d);
+  const row = after.find((r) => r.key === e.event_date.slice(0, 7));
+  assert.ok(row.rpa === null || row.rpa <= Math.max(...before.filter((v) => v !== null)) * 1.5);
+  assert.ok(row.missingAttendance >= 0);
+  e.attendance = saved;
+});
+
 test('year over year draws nothing rather than guessing on short history', () => {
   const d = withMonths({ months: 4 });
   const rows = monthSeries(d.events, d);
@@ -2170,22 +2199,46 @@ test('REGRESSION: an unrecorded shift is not a zero-hour shift', () => {
   // Number(null) is 0 and passes Number.isFinite, so a null hours_worked used
   // to arrive as a real 0 — which then bypassed the "hours ?? default"
   // fallback, priced staff at $0, and labelled it "from the time clock".
+  const sessions = [
+    { id: 's1', hall_id: 'h1', session_date: '2026-08-01', part: 'PM' },
+    { id: 's2', hall_id: 'h1', session_date: '2026-08-02', part: 'PM' },
+  ];
   const by = hoursBySession([
-    { work_date: '2026-08-01', hours_worked: null },
-    { work_date: '2026-08-01', hours_worked: undefined },
-    { work_date: '2026-08-02', hours_worked: '6.5' },
-  ]);
-  assert.equal(by.has('2026-08-01'), false, 'a day of unrecorded shifts has no hours');
-  assert.equal(by.get('2026-08-02'), 6.5);
+    { work_date: '2026-08-01', hall_id: 'h1', hours_worked: null },
+    { work_date: '2026-08-01', hall_id: 'h1', hours_worked: undefined },
+    { work_date: '2026-08-01', hall_id: 'h1', hours_worked: '0.00' },
+    { work_date: '2026-08-02', hall_id: 'h1', hours_worked: '6.5' },
+  ], sessions);
+  assert.equal(by.has('s1'), false, 'a day of unrecorded shifts has no hours');
+  assert.equal(by.get('s2'), 6.5);
 
   const a = loadAssumptions({ getItem: () => null });
   const d = makeData();
   const e = sessionEconomics(d.events[0], d, {
-    assumptions: a, cogs: new Map(), hours: by.get('2026-08-01') ?? null,
+    assumptions: a, cogs: new Map(), hours: by.get('s1') ?? null,
   });
   const staff = e.lines.find((l) => l.key === 'staff');
   assert.equal(staff.assumed, true, 'and the staff line is honestly marked assumed');
   assert.ok(staff.value !== 0, 'not priced at zero');
+});
+
+test('staff hours belong to their own session, not to every session that day', () => {
+  const sessions = [
+    { id: 'am', hall_id: 'h1', session_date: '2026-08-01', part: 'AM' },
+    { id: 'pm', hall_id: 'h1', session_date: '2026-08-01', part: 'PM' },
+    { id: 'other', hall_id: 'h2', session_date: '2026-08-01', part: 'PM' },
+  ];
+  const assignments = [{ id: 'a1', session_id: 'am' }, { id: 'a2', session_id: 'pm' }];
+  const by = hoursBySession([
+    { work_date: '2026-08-01', hall_id: 'h1', hours_worked: '4', assignment_id: 'a1' },
+    { work_date: '2026-08-01', hall_id: 'h1', hours_worked: '6', assignment_id: 'a2' },
+    { work_date: '2026-08-01', hall_id: 'h2', hours_worked: '5' },                 // one session: attributable
+    { work_date: '2026-08-01', hall_id: 'h1', hours_worked: '3' },                 // two sessions: not
+    { work_date: '2026-08-01', hall_id: 'h1', hours_worked: '7', category: 'pto', is_worked_time: false, assignment_id: 'a2' },
+  ], sessions, assignments);
+  assert.equal(by.get('am'), 4);
+  assert.equal(by.get('pm'), 6, 'PTO is not worked time');
+  assert.equal(by.get('other'), 5);
 });
 
 // Forecast roster regressions: see test/forecast.test.mjs.
