@@ -10,6 +10,19 @@ For a review without private SAR session data, run `npm run preview:scout` and o
 
 ## Included
 
+### Hall inbox (2 Oct 2026, from the Bingo Monitor brief)
+
+- **Inbox** is Scout's first view: one card per stable hall ID, texts and emails together. Each card shows the monitor's own counts (total, texts, emails), the latest update with its Pacific time and, for an email, its subject. Cards are newest first.
+- Opening a card loads the hall's full history from the monitor, newest first and paged (`offset`), with Text/Email labels and email subjects. The collection inbox's Google Group footer is cut from emails. A message sent to a shared list appears under each hall and names the others; two messages with the same words stay two rows.
+- Attribution is by `hallIds` only. The sender (e.g. the shared short code 70503) identifies nothing.
+- Welcome, verification and enrollment messages are hidden (`isProcedural`: by kind, or by narrow wording when no kind is set). Calls are not collected.
+- **Every hall, one day** reads `?day=` across all halls, including messages not yet matched to a hall.
+- **Directory** lists every listing with its eligibility, separate from the maps: on the maps (qualified), schedule to verify, not a competitor.
+- Maps count qualified programs only, say how many physical locations they occupy (several charities can share a building), list uncertain-schedule listings separately without counting them, and show address, website, signup state, platforms (BSeenNow, BingoMe Now…), presales and source links.
+- Verified live on 2 Oct: Vanguard Santa Clara shows 20 updates — 19 texts and 1 email (the 2 Oct $30,000 House Hot Ball email, in place between the 12:02 PM and older texts); history shows "20 of 20 — the full history".
+
+### Earlier
+
 - All-California directory plus Salinas/Monterey Bay, North Bay, Sacramento, Hawaiian Gardens, and whole Bay Area views. Santa Clara and Redwood City Vanguard retain distinct IDs and comparison origins.
 - Landing gallery contains five separate maps. Each area uses a 50-mile straight-line radius, shown as a dashed boundary. Actual hall coordinates determine membership; unlocated halls use the Census place center for list inclusion only, never a fabricated hall pin.
 - October 1 discovery ledger covers 651 unique Census cities/communities. Initial queries completed for 365; 65 were actual Google browser searches, the rest use the web-search tool. 286 places still have no completed discovery query. Google paused at a CAPTCHA, and web search reached rate limits. The expandable area checklist shows both general discovery and Google status; neither implies a complete hall inventory.
@@ -27,7 +40,7 @@ For a review without private SAR session data, run `npm run preview:scout` and o
 
 The collectors and Supabase remain the source of truth. Opening or refreshing the screen retrieves the latest stored collection. The new module does not replace their scheduled SMS/email ingestion and requires the monitor service to be reachable. The directory currently contains aliases, shared venues, historic entries and incomplete research; counts are program listings, not verified unique operating halls.
 
-A static-only host cannot serve `/api/competitive`. Production must run the SAR server middleware, or mount the same authenticated handler in its server deployment, as with the existing Operations and Ask SAR routes. No new database key belongs in the frontend. This change is implemented and tested locally; it has not been uploaded to GitHub or deployed to a public SAR host.
+In production the same handler runs in the `sar2-api` Edge Function (Operations project), behind SAR sign-in; the GitHub Pages site calls it. No new database key is in the frontend. `?day=YYYY-MM-DD` is forwarded only when it is a real calendar date; `?hall=` and `?offset=` as before.
 
 ## Interpretation
 
