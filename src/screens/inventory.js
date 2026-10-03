@@ -255,24 +255,24 @@ export function renderInventory({ data, params, onNavigate, setInspectorContent 
           <span class="kpi-value">${int(total.count)}</span></div>
         <div class="kpi"><span class="kpi-label">Value at cost</span>
           <span class="kpi-value">${usd(total.value)}</span>
-          ${total.unpriced ? `<span class="kpi-sub">${total.unpriced} with no cost recorded</span>` : ''}</div>
+          ${total.unpriced ? `<span class="kpi-sub">${int(total.unpriced)} with no cost recorded</span>` : ''}</div>
         <div class="kpi"><span class="kpi-label">On order</span>
           <span class="kpi-value">${usd(valueOf(scoped.filter((b) => b.state === 'on_order')).value)}</span>
           <span class="kpi-sub">not counted as stock</span></div>`));
 
       panel.append(table([
-        { label: 'Hall', cell: (r) => r.hall.toUpperCase() },
+        { label: 'Hall', cell: (r) => esc(String(r.hall).toUpperCase()) },
         { label: 'Boxes on hand', cls: 'num', cell: (r) => int(r.onHand.count) },
         { label: 'Value at cost', cls: 'num', cell: (r) => usd(r.onHand.value) },
         { label: 'By state', cell: (r) => r.byState.map((s) =>
-          `<span class="inv-state inv-${s.state}">${s.state.replace('_', ' ')} ${s.count}</span>`).join(' ') },
+          `<span class="inv-state inv-${esc(s.state)}">${esc(String(s.state).replace('_', ' '))} ${int(s.count)}</span>`).join(' ') },
       ], summary));
 
       const byProduct = stockByProduct(scoped, products, { hall });
       panel.append(h('h3', 'panel-title', 'By product'));
       panel.append(table([
         { label: 'Product', cell: (r) => `${esc(r.name)}${r.active ? '' : ' <span class="dim">(inactive)</span>'}` },
-        { label: 'Type', cell: (r) => r.type ?? DASH },
+        { label: 'Type', cell: (r) => esc(r.type ?? DASH) },
         { label: 'Boxes', cls: 'num', cell: (r) => int(r.count) },
         { label: 'Value at cost', cls: 'num', cell: (r) => usd(r.value) },
         { label: 'Retail face', cls: 'num',
@@ -295,12 +295,12 @@ export function renderInventory({ data, params, onNavigate, setInspectorContent 
         panel.append(h('div', 'mg-notice',
           `<strong>${risk.length} game${risk.length === 1 ? '' : 's'} in regular use `
           + 'can no longer be ordered.</strong> Worth knowing before the last box is '
-          + `opened rather than after: ${risk.slice(0, 4).map((r) => r.name).join(', ')}`
+          + `opened rather than after: ${risk.slice(0, 4).map((r) => esc(r.name)).join(', ')}`
           + `${risk.length > 4 ? '…' : ''}.`));
       }
       panel.append(table([
         { label: 'Game', cell: (r) => esc(r.name) },
-        { label: 'Category', cell: (r) => r.category ?? DASH },
+        { label: 'Category', cell: (r) => esc(r.category ?? DASH) },
         { label: 'Sessions', cls: 'num', cell: (r) => int(r.sessions) },
         { label: 'Units', cls: 'num', cell: (r) => int(r.qty) },
         { label: 'Last played', cell: (r) => (r.lastUsed ? dateShort(r.lastUsed) : DASH) },
@@ -324,10 +324,10 @@ export function renderInventory({ data, params, onNavigate, setInspectorContent 
         <div class="kpi"><span class="kpi-label">Total ordered</span>
           <span class="kpi-value">${usd(scoped.reduce((s, p) => s + (cents(p.total) ?? 0), 0))}</span></div>`));
       panel.append(table([
-        { label: 'Order', cell: (r) => r.num ?? DASH },
-        { label: 'Hall', cell: (r) => (r.hall_id ?? DASH).toUpperCase() },
-        { label: 'Vendor', cell: (r) => r.vendor_id ?? DASH },
-        { label: 'Status', cell: (r) => r.status ?? DASH },
+        { label: 'Order', cell: (r) => esc(r.num ?? DASH) },
+        { label: 'Hall', cell: (r) => esc(String(r.hall_id ?? DASH).toUpperCase()) },
+        { label: 'Vendor', cell: (r) => esc(r.vendor_id ?? DASH) },
+        { label: 'Status', cell: (r) => esc(r.status ?? DASH) },
         { label: 'Subtotal', cls: 'num', cell: (r) => (cents(r.subtotal) === null ? DASH : usd(cents(r.subtotal))) },
         { label: 'Tax', cls: 'num', cell: (r) => (cents(r.tax) === null ? DASH : usd(cents(r.tax))) },
         { label: 'Total', cls: 'num', cell: (r) => (cents(r.total) === null ? DASH : usd(cents(r.total))) },

@@ -21,6 +21,7 @@ import {
 import {
   COLUMNS, assertNoPayColumns,
 } from '../src/lib/ops.js';
+import { isPayColumn, PAY_ALLOWED } from '../src/lib/ops-schema.js';
 
 const SC = '2f1dddc3-33a1-4d89-9f9c-c56675270651';
 const RWC = 'ff061e83-598a-4c30-9df2-6532ba1c0795';
@@ -397,6 +398,37 @@ test('salary columns stay forbidden even though commission is now read', () => {
   assert.throws(() => assertNoPayColumns({ x: 'id,meal_premium_owed' }), /forbidden/);
   assert.throws(() => assertNoPayColumns({ x: 'id,annual_salary' }), /forbidden/);
   assert.equal(assertNoPayColumns({ x: 'commission_pool,payout_amount,shares' }), true);
+});
+
+test('the pay guard is token-based: every name the prefix pattern missed is now refused', () => {
+  // Each of these passed the old /(^|_)(wage|salary|hourly|premium|...)/ check.
+  for (const col of ['pay_rate', 'base_rate', 'regular_rate', 'overtime_rate', 'gross_pay', 'ot_pay',
+    'pay', 'compensation', 'comp', 'hourly_rate', 'tips', 'tip_amount', 'net_pay', 'basepay', 'payrate',
+    'paymaster_pay', 'bonus', 'earnings', 'salaried']) {
+    assert.equal(isPayColumn(col), true, `${col} is pay`);
+    assert.throws(() => assertNoPayColumns({ sched_staff: `id,name,${col}` }), /forbidden/, col);
+  }
+});
+
+test('the pay guard allows exactly the sales and commission columns SAR reads', () => {
+  for (const col of ['comm_rate', 'commission_rate', 'commission_target', 'target_rpa', 'actual_rpa',
+    'payout_amount', 'price_per_ticket', 'commission_pool', 'shares', 'total_shares']) {
+    assert.equal(isPayColumn(col), false, `${col} is a sales or commission figure`);
+  }
+  // Words that merely contain a short pay token are not pay.
+  for (const col of ['paymaster', 'payout', 'category', 'hours_worked', 'rpa', 'separate', 'tipping_point_id']) {
+    assert.equal(isPayColumn(col), false, col);
+  }
+  // Every column actually read passes, and only because of the allow-list
+  // where it needs it.
+  assert.equal(assertNoPayColumns(), true);
+  const used = new Set(Object.values(COLUMNS).flatMap((c) => c.split(',')));
+  for (const allowed of PAY_ALLOWED) {
+    if (!['commission_rate', 'commission_target'].includes(allowed)) {
+      assert.ok(used.has(allowed) || ['session_date', 'confirmed_at'].includes(allowed),
+        `${allowed} is allow-listed but no longer read; remove it from PAY_ALLOWED`);
+    }
+  }
 });
 
 test('the premium columns are not in the time-entry allowlist', () => {

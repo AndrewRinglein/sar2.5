@@ -819,7 +819,7 @@ function metricCard(r, i, cards) {
   head.type = 'button';
   head.setAttribute('aria-expanded', 'false');
   head.innerHTML = `
-    <span class="cmp-card-title">${m.label}<span class="cmp-chevron">▾</span></span>
+    <span class="cmp-card-title">${esc(m.label)}<span class="cmp-chevron">▾</span></span>
     <span class="cmp-means">
       <span class="cmp-mean cmp-mean-a"><span class="cmp-side">Cohort A</span>
         <span class="cmp-big">${m.fmt(r.A.mean)}</span>${sd(r.A)}</span>

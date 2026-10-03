@@ -4,6 +4,7 @@ import { monthSeries, monthFull, hallMatches } from '../lib/charts.js';
 import { usd, pct, int, esc, DASH } from '../lib/fmt.js';
 import { play } from '../lib/sound.js';
 import { serverRequest } from '../lib/server-request.js';
+import { MAX_CONTEXT_CHARS, MAX_HISTORY_TURNS, MAX_HISTORY_CHARS } from '../lib/ask-limits.js';
 
 const h = (tag, cls, html) => {
   const el = document.createElement(tag);
@@ -124,6 +125,42 @@ export function buildContext(data, { hall = 'all', months = 24 } = {}) {
     // Kept for older readers of the payload.
     months: monthRows('combined'),
   };
+}
+
+/**
+ * The package as sent: within the server's MAX_CONTEXT_CHARS.
+ *
+ * Today's ~900 sessions are well inside the cap (see ask-limits.js). When the
+ * history eventually outgrows it, the OLDEST session rows are left out — the
+ * monthly and weekday summaries still cover the whole span — and the package
+ * says so, rather than the question being refused by the server.
+ */
+export function fitContext(context, max = MAX_CONTEXT_CHARS) {
+  const size = JSON.stringify(context).length;
+  if (size <= max) return context;
+  const rows = context.sessions ?? [];
+  const note = 'Older session rows were left out to keep the request within its size limit; '
+    + 'the monthly and weekday summaries still cover every session.';
+  let room = max - JSON.stringify({ ...context, sessions: [], sessionsNote: note,
+    sessionCount: rows.length, span: context.span }).length - 64;
+  let from = rows.length;
+  while (from > 0) {
+    const len = JSON.stringify(rows[from - 1]).length + 1;
+    if (len > room) break;
+    room -= len; from -= 1;
+  }
+  const kept = rows.slice(from);
+  return { ...context, sessions: kept, sessionsNote: note,
+    span: context.span && kept.length ? { from: kept[0][0], to: context.span.to } : context.span };
+}
+
+/** Recent turns only, newest kept, within the server's history limits. */
+export function recentHistory(turns) {
+  const out = turns.slice(-MAX_HISTORY_TURNS).map(({ role, content }) => ({ role, content }));
+  let total = out.reduce((n, t) => n + t.content.length, 0);
+  while (out.length && total > MAX_HISTORY_CHARS) total -= out.shift().content.length;
+  while (out.length && out[0].role !== 'user') out.shift();
+  return out;
 }
 
 /** Conversation memory for follow-up questions. Lives for the browser session. */
@@ -266,7 +303,7 @@ export function renderAsk({ data, params, setInspectorContent }) {
   // Remove a credential saved by the old browser-key interface, if present.
   try { globalThis.localStorage?.removeItem('sar2-anthropic-key'); } catch { /* storage unavailable */ }
   const root = h('div', 'screen');
-  const context = buildContext(data);
+  const context = fitContext(buildContext(data));
   const panel = h('section', 'panel');
   panel.append(h('h3', 'panel-title', 'Ask SAR'));
   panel.append(h('p', 'muted', `Ask about any session, hall, weekday, month, product or jackpot. ${int(context.sessionCount)} sessions are loaded. Follow-up questions remember the conversation.`));
@@ -298,7 +335,7 @@ export function renderAsk({ data, params, setInspectorContent }) {
     if (busy || !question.trim()) return;
     busy = true;
     for (const b of panel.querySelectorAll('button')) b.disabled = true;
-    const history = conversation.map(({ role, content }) => ({ role, content }));
+    const history = recentHistory(conversation);
     conversation.push({ role: 'user', content: question.trim() });
     redraw();
     const thinking = h('p', 'dim'); thinking.textContent = 'Thinking…'; out.append(thinking);

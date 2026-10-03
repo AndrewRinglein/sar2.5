@@ -15,7 +15,7 @@
    evidence, so a reader can check rather than take it on trust.
    ========================================================================== */
 
-import { int, usd, DASH } from '../lib/fmt.js';
+import { int, usd, esc, DASH } from '../lib/fmt.js';
 import { SUPABASE_URL, OPS_URL, CUSTOMER_ID } from '../lib/config.js';
 import { play } from '../lib/sound.js';
 
@@ -208,18 +208,18 @@ export function renderSources({ data, params, onNavigate, setInspectorContent })
   if (tab === 'sources') {
     for (const s of sourceList(data)) {
       const panel = h('section', 'panel');
-      panel.append(h('h3', 'panel-title', s.group));
-      panel.innerHTML += `<p class="muted">${s.note}</p>
-        <p class="dim src-project">Project <code>${s.project}</code>
-        <span class="src-state src-${s.state.replace(/\s/g, '-')}">${s.state}</span></p>`;
+      panel.append(h('h3', 'panel-title', esc(s.group)));
+      panel.innerHTML += `<p class="muted">${esc(s.note)}</p>
+        <p class="dim src-project">Project <code>${esc(s.project)}</code>
+        <span class="src-state src-${esc(s.state.replace(/\s/g, '-'))}">${esc(s.state)}</span></p>`;
       const t = h('table', 'rn-table');
       t.innerHTML = `<thead><tr><th>Table</th><th>What it is</th>
         <th class="num">Rows loaded</th></tr></thead><tbody></tbody>`;
       const body = t.querySelector('tbody');
       for (const it of s.items) {
         body.insertAdjacentHTML('beforeend', `<tr>
-          <td><code>${it.name}</code></td>
-          <td class="dim">${it.what}</td>
+          <td><code>${esc(it.name)}</code></td>
+          <td class="dim">${esc(it.what)}</td>
           <td class="num">${it.count === null ? DASH : int(it.count)}</td></tr>`);
       }
       panel.append(t);
@@ -231,7 +231,7 @@ export function renderSources({ data, params, onNavigate, setInspectorContent })
       : 'none';
     root.append(h('section', 'panel', `
       <h3 class="panel-title">Coverage</h3>
-      <p class="muted">Sessions loaded span <strong>${dates}</strong>.
+      <p class="muted">Sessions loaded span <strong>${esc(dates)}</strong>.
       Row counts above are what this browser currently holds, not what the
       database contains — a filtered or partial load will show fewer.</p>`));
   } else {

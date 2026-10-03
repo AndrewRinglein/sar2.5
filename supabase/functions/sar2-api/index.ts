@@ -255,27 +255,78 @@ var VALIDATOR_FORBIDDEN = Object.freeze([
   "created_by",
   "updated_by"
 ]);
+function slotOf(value) {
+  if (typeof value === "number") return Number.isSafeInteger(value) ? value : null;
+  if (typeof value !== "string" || !/^-?\d+$/.test(value.trim())) return null;
+  const n = Number(value);
+  return Number.isSafeInteger(n) ? n : null;
+}
 function projectValidatorRow(row = {}) {
   const out = {};
   for (const c of VALIDATOR_COLUMNS) out[c] = row[c] ?? null;
   const crew = Array.isArray(row.crew) ? row.crew : [];
-  out.crew = crew.filter((e) => e && typeof e === "object").map((e) => {
-    const x = {};
-    for (const f of VALIDATOR_CREW_FIELDS) x[f] = e[f] ?? null;
-    return x;
-  });
+  out.crew = crew.filter((e) => e && typeof e === "object").map((e) => ({
+    // Text is text: a nested value is dropped, not passed through.
+    name: typeof e.name === "string" ? e.name : null,
+    role: typeof e.role === "string" ? e.role : null,
+    slot: slotOf(e.slot)
+  }));
   return out;
 }
 var MANAGER_ROLES = Object.freeze(["MOD", "Paymaster", "Flash Manager"]);
-var PAY_PATTERN = /(^|_)(wage|salary|hourly|premium|earn|bonus|tip|salaried)/i;
-var PAY_ALLOWED = /* @__PURE__ */ new Set([
+var PAY_TOKENS = Object.freeze([
+  "pay",
+  "pays",
+  "rate",
+  "rates",
+  "tip",
+  "tips",
+  "comp",
+  "earn",
+  "earns",
+  "earned",
+  "wage",
+  "wages",
+  "salary",
+  "salaries",
+  "salaried",
+  "hourly",
+  "premium",
+  "premiums",
+  "earning",
+  "earnings",
+  "bonus",
+  "bonuses",
+  "compensation"
+]);
+var PAY_WORDS = /wage|salar|hourly|premium|bonus|compensation|earning|payroll|payrate|paycheck|basepay|grosspay|netpay/i;
+var TOKENS = new Set(PAY_TOKENS);
+var PAY_ALLOWED = Object.freeze(/* @__PURE__ */ new Set([
+  "comm_rate",
+  // sched_sessions: the session's commission RATE (a percentage of sales)
+  "commission_rate",
+  // recon_sessions projection: the same rate as the validator records it
+  "commission_target",
+  // recon_sessions projection: the RPA target the rate applies above
+  "target_rpa",
+  // revenue per attendee target — a sales figure
+  "actual_rpa",
+  // revenue per attendee — a sales figure
+  "price_per_ticket",
+  // products: the price a customer pays for a ticket
   "commission_pool",
   "payout_amount",
   "shares",
   "total_shares",
+  // commission, permitted
   "session_date",
   "confirmed_at"
-]);
+]));
+function isPayColumn(column) {
+  const col = String(column).trim().toLowerCase();
+  if (!col || PAY_ALLOWED.has(col)) return false;
+  return PAY_WORDS.test(col) || col.split(/[^a-z0-9]+/).some((t) => TOKENS.has(t));
+}
 function assertNoPayColumns(columns = {
   ...COLUMNS,
   [VALIDATOR_TABLE]: VALIDATOR_COLUMNS.join(","),
@@ -285,7 +336,7 @@ function assertNoPayColumns(columns = {
   for (const [table, cols] of Object.entries(columns)) {
     for (const c of cols.split(",")) {
       const col = c.trim();
-      if (!PAY_ALLOWED.has(col) && PAY_PATTERN.test(col)) bad.push(`${table}.${col}`);
+      if (isPayColumn(col)) bad.push(`${table}.${col}`);
     }
   }
   if (bad.length) throw new Error(`ops.js: pay columns are forbidden: ${bad.join(", ")}`);
@@ -346,7 +397,10 @@ var VALIDATOR_SQL = [
   "  to_char(r.session_time, 'HH24:MI') AS session_time, r.slot_name, r.status,",
   "  r.closed_at, r.updated_at,",
   `  r.state #>> ${path(VALIDATOR_STATE_PATHS.staff_status)} AS staff_status,`,
-  `  COALESCE((SELECT jsonb_agg(jsonb_build_object(${VALIDATOR_CREW_FIELDS.map((f) => f === "slot" ? `'${f}', e.value -> '${f}'` : `'${f}', e.value ->> '${f}'`).join(", ")}) ORDER BY e.ord)`,
+  // Every crew field is read as TEXT (->>), never as jsonb (->): a nested
+  // object under `slot` can then never reach the browser. projectValidatorRow
+  // turns slot back into an integer, or null.
+  `  COALESCE((SELECT jsonb_agg(jsonb_build_object(${VALIDATOR_CREW_FIELDS.map((f) => `'${f}', e.value ->> '${f}'`).join(", ")}) ORDER BY e.ord)`,
   `    FROM jsonb_array_elements(CASE WHEN jsonb_typeof(r.state #> ${path(VALIDATOR_STATE_PATHS.crew)}) = 'array'`,
   `      THEN r.state #> ${path(VALIDATOR_STATE_PATHS.crew)} ELSE '[]'::jsonb END) WITH ORDINALITY AS e(value, ord)), '[]'::jsonb) AS crew,`,
   `  r.state #>> ${path(VALIDATOR_STATE_PATHS.commission_rate)} AS commission_rate,`,
@@ -417,6 +471,16 @@ async function readCompetitive(query, fetchImpl = fetch) {
   return result;
 }
 
+// src/lib/ask-limits.js
+var MAX_CONTEXT_CHARS = 45e4;
+var MAX_BODY_BYTES = 6e5;
+var MAX_HISTORY_TURNS = 12;
+var MAX_HISTORY_CHARS = 3e4;
+var ASK_DAILY_CALLS = 100;
+var ASK_DAILY_CHARS = 3e6;
+var ASK_LIMIT_PER_MINUTE = 10;
+var ASK_TIME_ZONE = "America/Los_Angeles";
+
 // server/api-core.mjs
 var DEFAULT_MODEL = "claude-sonnet-5-5";
 var SYSTEM_PROMPT = [
@@ -430,10 +494,8 @@ var SYSTEM_PROMPT = [
   'Be concise. End every answer with one line starting "Basis:" naming the halls, period and number of sessions or months used.'
 ].join("\n");
 var MAX_KNOWLEDGE_CHARS = 6e4;
-var MAX_BODY_BYTES = 15e5;
-var MAX_HISTORY_TURNS = 12;
-var ASK_LIMIT_PER_MINUTE = 10;
 var ROUTES = Object.freeze({ operations: "GET", "ask-sar": "POST", competitive: "GET" });
+var TOO_LARGE = "That question carries too much data to send. Narrow it to one hall or a shorter period and try again.";
 var UNAVAILABLE = Object.freeze({
   operations: "Operations data is temporarily unavailable.",
   "ask-sar": "Ask SAR is temporarily unavailable.",
@@ -450,7 +512,26 @@ function sanitizeHistory(history) {
     turns.push({ role, content });
   }
   while (turns.length && turns[turns.length - 1].role !== "assistant") turns.pop();
+  const size = () => turns.reduce((n, t) => n + t.content.length, 0);
+  while (turns.length && size() > MAX_HISTORY_CHARS) turns.splice(0, 2);
   return turns;
+}
+var ASK_USAGE_SQL = [
+  "INSERT INTO public.sar2_ask_usage AS u (user_id, day, calls, chars)",
+  `VALUES ($1::uuid, (now() AT TIME ZONE '${ASK_TIME_ZONE}')::date, 1, $2::bigint)`,
+  "ON CONFLICT (user_id, day) DO UPDATE",
+  "  SET calls = u.calls + 1, chars = u.chars + EXCLUDED.chars",
+  "  WHERE u.calls + 1 <= $3 AND u.chars + EXCLUDED.chars <= $4",
+  "RETURNING calls, chars"
+].join("\n");
+var USAGE_UNAVAILABLE = Object.freeze({
+  "42P01": "the sar2_ask_usage table does not exist yet (run scripts/owner-security.sql)",
+  "42501": "this database role may not write sar2_ask_usage",
+  "25006": "this database role is read-only",
+  "22P02": "the account id is not a uuid"
+});
+function quotaDay(at = Date.now()) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: ASK_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(at));
 }
 async function authorize(header, fetchImpl = fetch) {
   if (!/^Bearer [^\s]+$/.test(header ?? "")) return null;
@@ -499,6 +580,33 @@ function createApiCore({
 } = {}) {
   const rates = /* @__PURE__ */ new Map();
   const allowedOrigins = cors ? new Set(cors.origins) : null;
+  const daily = /* @__PURE__ */ new Map();
+  const warnedUsage = /* @__PURE__ */ new Set();
+  const memoryQuota = (userId, chars) => {
+    const day = quotaDay(now());
+    for (const [id, v] of daily) if (v.day !== day) daily.delete(id);
+    const u = daily.get(userId) ?? { day, calls: 0, chars: 0 };
+    if (u.calls + 1 > ASK_DAILY_CALLS || u.chars + chars > ASK_DAILY_CHARS) return false;
+    u.calls += 1;
+    u.chars += chars;
+    daily.set(userId, u);
+    return true;
+  };
+  const takeQuota = async (userId, chars) => {
+    if (typeof pool?.query !== "function") return memoryQuota(userId, chars);
+    try {
+      const { rows } = await pool.query(ASK_USAGE_SQL, [userId, chars, ASK_DAILY_CALLS, ASK_DAILY_CHARS]);
+      return rows.length > 0;
+    } catch (error) {
+      const why = USAGE_UNAVAILABLE[error?.code];
+      if (!why) throw error;
+      if (!warnedUsage.has(error.code)) {
+        warnedUsage.add(error.code);
+        console.warn(`SAR: Ask SAR daily quota kept in memory — ${why}.`);
+      }
+      return memoryQuota(userId, chars);
+    }
+  };
   return async function handle({ method, url, headers = {}, readBody }) {
     const path2 = (url ?? "").split("?")[0];
     const route = matchRoute(path2, prefixes);
@@ -530,17 +638,16 @@ function createApiCore({
       let body;
       try {
         body = await readBody(MAX_BODY_BYTES);
-      } catch {
+      } catch (error) {
+        if (error?.message === "payload") return send(413, { error: TOO_LARGE });
         return send(400, { error: "Invalid question." });
       }
       if (!validQuestion(body)) return send(400, { error: "Enter a question of up to 2,000 characters." });
+      const data = JSON.stringify(body.context);
+      if (data.length > MAX_CONTEXT_CHARS) return send(413, { error: TOO_LARGE });
       for (const [id, value] of rates) if (value.until <= now()) rates.delete(id);
       const rate = rates.get(userId) ?? { count: 0, until: now() + 6e4 };
       if (rate.count >= ASK_LIMIT_PER_MINUTE) return send(429, { error: "Please wait a moment before asking again." });
-      rate.count++;
-      rates.set(userId, rate);
-      const key = apiKey || await loadKey(pool);
-      if (!key) return send(503, { error: UNAVAILABLE["ask-sar"] });
       const owner = String(knowledge() ?? "").slice(0, MAX_KNOWLEDGE_CHARS);
       const system = [
         {
@@ -552,9 +659,17 @@ ${owner}` : ""),
           cache_control: { type: "ephemeral" }
         },
         { type: "text", text: `# Data
-${JSON.stringify(body.context)}`, cache_control: { type: "ephemeral" } }
+${data}`, cache_control: { type: "ephemeral" } }
       ];
       const messages = [...sanitizeHistory(body.history), { role: "user", content: body.question.trim() }];
+      const chars = system.reduce((n, b) => n + b.text.length, 0) + messages.reduce((n, m) => n + m.content.length, 0);
+      rate.count++;
+      rates.set(userId, rate);
+      if (!await takeQuota(userId, chars)) {
+        return send(429, { error: "You have reached today's Ask SAR limit. It resets at midnight Pacific time." });
+      }
+      const key = apiKey || await loadKey(pool);
+      if (!key) return send(503, { error: UNAVAILABLE["ask-sar"] });
       const response = await fetchImpl("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },

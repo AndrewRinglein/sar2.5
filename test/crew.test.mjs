@@ -103,7 +103,8 @@ test('validator SQL selects only the allowlisted fields and never a whole jsonb 
   }
   assert.doesNotMatch(VALIDATOR_SQL, /SELECT \*|r\.state\s*(,|AS|\n|$)/);
   // The crew array is rebuilt with name, role and slot only.
-  assert.match(VALIDATOR_SQL, /jsonb_build_object\('name', e\.value ->> 'name', 'role', e\.value ->> 'role', 'slot', e\.value -> 'slot'\)/);
+  assert.match(VALIDATOR_SQL, /jsonb_build_object\('name', e\.value ->> 'name', 'role', e\.value ->> 'role', 'slot', e\.value ->> 'slot'\)/);
+  assert.doesNotMatch(VALIDATOR_SQL, /e\.value -> '/, 'no crew field is selected as jsonb');
   for (const c of VALIDATOR_COLUMNS) assert.match(VALIDATOR_SQL, new RegExp(`\\b${c}\\b`));
 });
 
@@ -117,6 +118,21 @@ test('the projection strips anything outside the allowlist, row and crew alike',
   assert.deepEqual(out.crew, [{ name: 'Pat Ember', role: 'MOD', slot: 0 }]);
   assert.equal(assertNoPayColumns(), true, 'the default check includes the validator projection');
   assert.throws(() => assertNoPayColumns({ recon_sessions: 'id,hourly_rate' }), /forbidden/);
+});
+
+test('a crew slot is an integer or null — a nested object can never pass through', () => {
+  const crewOf = (slot, extra = {}) => projectValidatorRow({ ...vrow('sc', '2026-08-12', '18:30', []),
+    crew: [{ name: 'Pat', role: 'MOD', slot, ...extra }] }).crew[0];
+  // The SQL now reads slot as text, so the common case is a numeric string.
+  assert.equal(crewOf('3').slot, 3);
+  assert.equal(crewOf(0).slot, 0);
+  for (const bad of [{ cash: 500 }, [1], '2.5', '', 'x', null, undefined, '1e400', true]) {
+    assert.equal(crewOf(bad).slot, null, `slot ${JSON.stringify(bad)}`);
+  }
+  // Name and role are text or nothing, never an object.
+  const odd = projectValidatorRow({ ...vrow('sc', '2026-08-12', '18:30', []),
+    crew: [{ name: { first: 'Pat' }, role: ['MOD'], slot: '1' }] }).crew[0];
+  assert.deepEqual(odd, { name: null, role: null, slot: 1 });
 });
 
 test('operations reads the validator in the same read-only snapshot, behind a savepoint', async () => {

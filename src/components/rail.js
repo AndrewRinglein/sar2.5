@@ -12,6 +12,7 @@
    ========================================================================== */
 
 import { NAV, buildHash } from '../lib/router.js';
+import { esc } from '../lib/fmt.js';
 
 export function renderRail({ active, customerName, onNavigate } = {}) {
   const rail = document.createElement('nav');
@@ -24,7 +25,7 @@ export function renderRail({ active, customerName, onNavigate } = {}) {
     <img src="./vanguard_logo.png" alt="">
     <div>
       <div class="rail-title">SAR</div>
-      <div class="rail-sub">${customerName ?? 'Session Analysis Reporting'}</div>
+      <div class="rail-sub">${esc(customerName ?? 'Session Analysis Reporting')}</div>
     </div>`;
   rail.append(head);
 

@@ -230,12 +230,14 @@ function balanceTable(people, onNavigate) {
 
 function overview(model, params, onNavigate, rerender) {
   const wrap = h('div');
-  const sortKey = params.metric ?? null;
+  // From the URL: an unknown metric would leave every person without a roll
+  // for it and crash the sort, so only a real metric key is honoured.
+  const sortKey = METRICS.some((m) => m.key === params.metric) ? params.metric : null;
 
   for (const role of ROLES) {
     const people = model.people.filter((p) => p.role === role);
     const block = h('section', 'panel');
-    block.append(h('h3', 'panel-title', role));
+    block.append(h('h3', 'panel-title', esc(role)));
 
     if (!people.length) {
       block.append(h('p', 'muted', 'No attributed sessions yet'));
@@ -380,11 +382,11 @@ function person(model, params, data, onNavigate) {
   }
 
   wrap.append(h('div', 'screen-head', `<h2>${esc(held[0].name)}</h2>
-    <p class="muted">${held.map((p) => p.role).join(' · ')}</p>`));
+    <p class="muted">${held.map((p) => esc(p.role)).join(' · ')}</p>`));
 
   for (const p of held) {
     const block = h('section', 'panel');
-    block.append(h('h3', 'panel-title', p.role));
+    block.append(h('h3', 'panel-title', esc(p.role)));
 
     if (p.isRate) {
       const b = p.balance;
@@ -414,8 +416,8 @@ function person(model, params, data, onNavigate) {
           c.ok ? 'balanced' : 'off'}</span>` : DASH);
         bb.insertAdjacentHTML('beforeend', `<tr>
           <td>${weekday(e.event_date).slice(0, 3)} ${dateShort(e.event_date)}</td>
-          <td>${data.locations.find((l) => l.id === e.location_id)?.name ?? DASH}</td>
-          <td>${sessionType(e.event_type)}</td>
+          <td>${esc(data.locations.find((l) => l.id === e.location_id)?.name ?? DASH)}</td>
+          <td>${esc(sessionType(e.event_type))}</td>
           <td>${mark(dep)}</td><td>${mark(tie)}</td>
           <td class="num">${dep ? usd2(Math.abs(dep.off)) : DASH}</td>
           <td class="dim">${crewFrom(s)}</td></tr>`);
@@ -456,13 +458,13 @@ function person(model, params, data, onNavigate) {
     const mixEl = h('p', 'muted');
     mixEl.innerHTML = `<span class="inspector-section-label">Nights worked</span> ${
       [...mix.entries()].sort((a, b) => b[1] - a[1])
-        .map(([k, n]) => `${k} ×${n}`).join(' · ') || DASH}`;
+        .map(([k, n]) => `${esc(k)} ×${int(n)}`).join(' · ') || DASH}`;
     block.append(mixEl);
 
     const table = h('table', 'rn-table');
     table.innerHTML = `<thead><tr>
       <th>Date</th><th>Hall</th><th>Session</th>
-      <th class="num">${primary.label}</th>
+      <th class="num">${esc(primary.label)}</th>
       <th class="num">Typical</th>
       <th class="num">vs typical</th>
       <th class="num">Score</th><th>Crew from</th></tr></thead><tbody></tbody>`;
@@ -479,8 +481,8 @@ function person(model, params, data, onNavigate) {
       const hall = data.locations.find((l) => l.id === e.location_id)?.name ?? DASH;
       body.insertAdjacentHTML('beforeend', `<tr>
         <td>${weekday(e.event_date).slice(0, 3)} ${dateShort(e.event_date)}</td>
-        <td>${hall}</td>
-        <td>${sessionType(e.event_type)}</td>
+        <td>${esc(hall)}</td>
+        <td>${esc(sessionType(e.event_type))}</td>
         <td class="num">${fmtValue(primary.kind, b?.value ?? null)}</td>
         <td class="num dim">${fmtValue(primary.kind, b?.usable ? b.mean : null)}</td>
         <td class="num dim">${sigma(sc.z)}</td>
@@ -520,10 +522,10 @@ function dayshape(model, data) {
   for (const s of slots) {
     const hall = data.locations.find((l) => l.id === s.locationId)?.name ?? DASH;
     body.insertAdjacentHTML('beforeend', `<tr>
-      <td>${hall}</td>
+      <td>${esc(hall)}</td>
       <td>${DAY_NAMES[s.weekday]}</td>
-      <td>${sessionType(s.eventType)}</td>
-      <td class="num">${s.n}</td>
+      <td>${esc(sessionType(s.eventType))}</td>
+      <td class="num">${int(s.n)}</td>
       <td class="num">${usd(s.mean)}</td>
       <td class="num"><strong>${s.index === null ? DASH : s.index.toFixed(2)}×</strong></td>
       <td class="num dim">${s.cv === null ? DASH : pct(s.cv)}</td></tr>`);
@@ -564,7 +566,7 @@ export function sourcesLine(model) {
     ? ` (${int(c.validatorProgress)} not yet approved)` : ''},
     ${n(c.scheduler, 'session', 'sessions')} from the scheduler,
     ${n(c.none, 'session', 'sessions')} with no crew
-    <span class="dim">· ${dateShort(span.start)} ${span.start.slice(0, 4)} – ${dateShort(span.end)} ${span.end.slice(0, 4)}</span>${
+    <span class="dim">· ${dateShort(span.start)} ${esc(span.start.slice(0, 4))} – ${dateShort(span.end)} ${esc(span.end.slice(0, 4))}</span>${
     model.validator?.ok ? '' : ' <span class="dim">· validator not connected, so crews are from the scheduler only</span>'}`;
   return el;
 }

@@ -80,12 +80,12 @@ function shell({ title, body, status, statusKind = '', action }) {
       <div class="boot-inner">
         <img src="./vanguard_logo.png" alt="">
         <h1>SAR</h1>
-        <p><strong>Session Analysis Reporting</strong>${orgName ? `<br>${orgName}` : ''}</p>
+        <p><strong>Session Analysis Reporting</strong>${orgName ? `<br>${esc(orgName)}` : ''}</p>
         ${title ? `<p class="semi">${title}</p>` : ''}
         ${body ? `<p>${body}</p>` : ''}
         ${action ? `<p style="margin-top:var(--s-5)">${action}</p>` : ''}
-        ${status ? `<div class="boot-status ${statusKind}" role="status"><span class="dot"></span>${status}</div>` : ''}
-        <p class="version" style="margin-top:var(--s-6)">v${VERSION} · tenant <code>${CUSTOMER_ID}</code></p>
+        ${status ? `<div class="boot-status ${statusKind}" role="status"><span class="dot"></span>${esc(status)}</div>` : ''}
+        <p class="version" style="margin-top:var(--s-6)">v${VERSION} · tenant <code>${esc(CUSTOMER_ID)}</code></p>
       </div>
     </div>`);
 }
@@ -137,7 +137,7 @@ function signInScreen(err) {
       btn.textContent = 'Sign in';
       const s = v.querySelector('.boot-status') || v.querySelector('.boot-inner').appendChild(el('<div class="boot-status err" role="status"><span class="dot"></span></div>'));
       s.className = 'boot-status err';
-      s.innerHTML = `<span class="dot"></span>${ex.message}`;
+      s.innerHTML = `<span class="dot"></span>${esc(ex.message)}`;
     }
   });
 
@@ -159,7 +159,7 @@ function signInScreen(err) {
 function noAccessScreen(user) {
   const v = shell({
     title: 'Signed in, but no SAR access',
-    body: `<code>${user.email}</code> has no Vanguard SAR role. Ask an administrator
+    body: `<code>${esc(user.email)}</code> has no Vanguard SAR role. Ask an administrator
            to grant one, then reload.`,
     action: '<button id="out">Sign out</button>',
     status: 'No role in user_roles for this account',
@@ -308,13 +308,13 @@ function renderScreen(route, data) {
 
   const head = document.createElement('div');
   head.className = 'screen-head';
-  head.innerHTML = `<h2>${screen.label}</h2>`;
+  head.innerHTML = `<h2>${esc(screen.label)}</h2>`;
 
   const body = document.createElement('div');
   body.className = 'placeholder';
   body.innerHTML = `
-    <p class="semi">${screen.label} is not built yet</p>
-    <p>Scheduled for <code>${screen.unit}</code>.</p>
+    <p class="semi">${esc(screen.label)} is not built yet</p>
+    <p>Scheduled for <code>${esc(screen.unit)}</code>.</p>
     <p class="dim" style="margin-top:var(--s-4)">
       ${data.events.length.toLocaleString()} sessions loaded ·
       ${data.locations.length} locations ·

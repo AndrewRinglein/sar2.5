@@ -151,8 +151,8 @@ export function renderNotifications({ data, params, onNavigate, setInspectorCont
       const item = h('div', `notif notif-${n.severity ?? 'info'}${n.read ? ' is-read' : ''}`);
       item.innerHTML = `
         <div class="notif-head">
-          <span class="notif-sev">${n.severity ?? 'info'}</span>
-          <span class="notif-type">${humanType(n.event_type)}</span>
+          <span class="notif-sev">${esc(n.severity ?? 'info')}</span>
+          <span class="notif-type">${esc(humanType(n.event_type))}</span>
           <span class="dim notif-when">${n.created_at ? dateShort(String(n.created_at).slice(0, 10)) : DASH}</span>
           ${n.read ? '' : '<span class="notif-dot" title="unread"></span>'}
         </div>

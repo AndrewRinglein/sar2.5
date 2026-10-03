@@ -16,7 +16,7 @@
 import {
   metricsFor, sessionTotals, comparisonPool, standing, getMetric, MIN_POOL,
 } from '../lib/model.js';
-import { usd, pct, int, dateLong, weekday, sessionType, DASH } from '../lib/fmt.js';
+import { usd, pct, int, dateLong, weekday, sessionType, esc, DASH } from '../lib/fmt.js';
 
 const h = (tag, cls, html) => {
   const el = document.createElement(tag);
@@ -128,17 +128,17 @@ export function renderAnomaly({ data, params, onNavigate, setInspectorContent })
         <div class="finding-head">
           <span class="jp-status jp-${tone === 'neg' ? 'hot' : 'building'}">${
             f.kind === 'structural' ? 'DATA' : (f.worse ? 'LOW' : 'HIGH')}</span>
-          <button class="link" data-open="${f.event.id}">${hall}</button>
+          <button class="link" data-open="${esc(f.event.id)}">${esc(hall)}</button>
           <span class="dim">${dateLong(f.event.event_date)} ·
-            ${sessionType(f.event.event_type)}</span>
+            ${esc(sessionType(f.event.event_type))}</span>
         </div>
-        <p class="semi">${f.label}</p>
+        <p class="semi">${esc(f.label)}</p>
         ${f.kind === 'statistical' ? `
           <p class="muted">${f.check.fmt(f.value)} against a typical
             ${f.check.fmt(f.standing.mean)} — ${Math.abs(f.standing.z).toFixed(1)}
             standard deviations out, measured over ${f.standing.n} other
-            ${weekday(f.event.event_date)} ${sessionType(f.event.event_type).toLowerCase()}
-            session${f.standing.n === 1 ? '' : 's'} at ${hall}.</p>`
+            ${weekday(f.event.event_date)} ${esc(sessionType(f.event.event_type).toLowerCase())}
+            session${f.standing.n === 1 ? '' : 's'} at ${esc(hall)}.</p>`
         : '<p class="muted">A data fault rather than an unusual night. Worth checking the source.</p>'}`;
       panel.append(item);
     }

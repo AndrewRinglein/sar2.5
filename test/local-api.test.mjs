@@ -4,6 +4,7 @@ import { Readable } from 'node:stream';
 import { authorize, createLocalApi, sanitizeHistory, loadKnowledge, MAX_BODY_BYTES, MAX_HISTORY_TURNS } from '../server/local-api.mjs';
 import { databaseOptions, readOperations, readAnthropicKey, saveAnthropicKey, SECRET_NAME } from '../server/database.mjs';
 import { getSchedule } from '../src/lib/ops.js';
+import { isPayColumn } from '../src/lib/ops-schema.js';
 
 async function invoke(handler, { path = '/api/operations', method = 'GET',
   authorization = 'Bearer test-session', origin, body } = {}) {
@@ -259,7 +260,7 @@ test('Ask SAR accepts a large data package but not an unbounded one', async () =
   const big = { ...question, context: { sessions: Array.from({ length: 900 }, (_, i) => ['2026-01-01', 'Santa Clara', 'regular', 'Mon', 150, 12000.5, 7000.25, 5000.25, 41.67, 80, 1, 2, 3, 4]) } };
   assert.equal((await invoke(handler, { path: '/api/ask-sar', method: 'POST', body: big })).status, 200);
   const huge = { ...question, context: { blob: 'x'.repeat(MAX_BODY_BYTES) } };
-  assert.equal((await invoke(handler, { path: '/api/ask-sar', method: 'POST', body: huge })).status, 400);
+  assert.equal((await invoke(handler, { path: '/api/ask-sar', method: 'POST', body: huge })).status, 413);
   assert.equal(calls, 1);
 });
 
@@ -295,7 +296,12 @@ test('the sar_reader setup script grants exactly the allowlist, read-only, no pa
   const body = sql.split('\n').filter((l) => !l.startsWith('--')).join('\n');
   assert.match(body, /default_transaction_read_only = on/);
   assert.doesNotMatch(body, /\b(insert|update|delete|truncate|all privileges|superuser|createrole)\b/i);
-  assert.doesNotMatch(body, /premium|base_rate|regular_rate|hourly_rate|wage/i);
+  // The same pay guard the server read uses (ops-schema isPayColumn), applied
+  // to every column the login is granted — one definition, not a second list.
+  const granted = [...body.matchAll(/grant select \(([^)]*)\) on public\.(\w+)/g)]
+    .flatMap(([, cols, table]) => cols.split(',').map((c) => `${table}.${c.trim()}`));
+  assert.ok(granted.length > 50, 'the grants were parsed');
+  assert.deepEqual(granted.filter((tc) => isPayColumn(tc.split('.')[1])), [], 'no pay column is granted');
   assert.doesNotMatch(body, /grant select on /i, 'every grant names its columns');
   assert.match(body, /password 'CHANGE-ME'/, 'no real password ever ships');
 });

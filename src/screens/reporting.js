@@ -20,7 +20,7 @@
    ========================================================================== */
 
 import { metricsFor, sessionTotals, getMetric, maxAttendanceFor } from '../lib/model.js';
-import { usd, usd2, pct, int, monthLabel, DASH } from '../lib/fmt.js';
+import { usd, usd2, pct, int, monthLabel, esc, DASH } from '../lib/fmt.js';
 import { play } from '../lib/sound.js';
 
 const h = (tag, cls, html) => {
@@ -199,7 +199,7 @@ function changeTag(change, { points = false, invert = false } = {}) {
 --------------------------------------------------------------------------- */
 
 function row(label, value) {
-  return `<div class="rp-row"><span>${label}</span><span>${value}</span></div>`;
+  return `<div class="rp-row"><span>${esc(label)}</span><span>${value}</span></div>`;
 }
 
 function boxes(p, changes) {
@@ -244,7 +244,7 @@ function boxes(p, changes) {
       // `show_rpa || show_margin`; they still appear in the expansion.
       value: cats.filter((c) => c.showRpa || c.showMargin).map((c) => `
         <div class="rp-share">
-          <span>${c.name}</span>
+          <span>${esc(c.name)}</span>
           <span>${pct(m.totalSales > 0 ? c.revenue / m.totalSales : null)}
             ${changeTag(changes.categoryShare?.[c.key], { points: true })}</span>
         </div>`).join(''),
@@ -254,7 +254,7 @@ function boxes(p, changes) {
         const margin = c.revenue > 0 ? net / c.revenue : null;
         const share = m.totalSales > 0 ? c.revenue / m.totalSales : null;
         return `<div class="rp-prod">
-          <div class="rp-prod-name">${c.name}</div>
+          <div class="rp-prod-name">${esc(c.name)}</div>
           ${row('Sales', usd(c.revenue))}
           ${row('Payouts', usd(c.payout))}
           ${row('Net', usd(net))}
@@ -321,7 +321,7 @@ function periodColumn(p, changes, expanded, onToggle) {
 
   const head = h('div', 'rp-head');
   head.innerHTML = `
-    <div class="rp-month">${p.label}</div>
+    <div class="rp-month">${esc(p.label)}</div>
     <div class="rp-count">${int(p.metrics.eventCount)}
       session${p.metrics.eventCount === 1 ? '' : 's'}${
         p.inProgress ? ' <span class="rp-partial">in progress</span>' : ''}</div>`;
@@ -334,7 +334,7 @@ function periodColumn(p, changes, expanded, onToggle) {
     box.type = 'button';
     box.setAttribute('aria-expanded', String(open));
     box.innerHTML = `
-      <div class="rp-box-label">${b.label}</div>
+      <div class="rp-box-label">${esc(b.label)}</div>
       <div class="${b.isList ? 'rp-box-list' : 'rp-box-value'}">${b.value}</div>
       ${b.change ?? ''}
       <div class="rp-detail"${open ? '' : ' hidden'}>${b.detail.join('')}</div>`;
@@ -436,10 +436,10 @@ export function renderReporting({ data, params, onNavigate, setInspectorContent 
 
   setInspectorContent?.(`
     <p class="semi">${mode === 'quarterly' ? 'Quarterly' : 'Monthly'} reporting</p>
-    <p class="muted">${hall === 'all' ? 'Both halls'
-      : data.locations.find((l) => l.id === hall)?.name ?? ''} ·
+    <p class="muted">${esc(hall === 'all' ? 'Both halls'
+      : data.locations.find((l) => l.id === hall)?.name ?? '')} ·
       ${periods.length} ${mode === 'quarterly' ? 'quarters' : 'months'}</p>
-    <p class="inspector-section-label">Latest — ${latest.label}</p>
+    <p class="inspector-section-label">Latest — ${esc(latest.label)}</p>
     <dl class="inspector-filters">
       <dt>Sessions</dt><dd>${int(latest.metrics.eventCount)}</dd>
       <dt>Total sales</dt><dd>${usd(latest.metrics.totalSales)}</dd>
@@ -452,7 +452,7 @@ export function renderReporting({ data, params, onNavigate, setInspectorContent 
       <dt>Sessions</dt><dd>${int(totalSessions)}</dd>
       <dt>Complete</dt><dd>${complete.length}</dd>
     </dl>
-    ${latest.inProgress ? `<p class="dim">${latest.label} is still in progress.
+    ${latest.inProgress ? `<p class="dim">${esc(latest.label)} is still in progress.
       Its sales, payouts and net are shown but NOT compared against last
       ${mode === 'quarterly' ? 'quarter' : 'month'} — a partial period against a
       whole one is meaningless. Margin, RPA and attendance are rates, so those

@@ -25,7 +25,7 @@ import {
 import {
   metricsFor, sessionTotals, getMetric, jackpotParticipation,
 } from '../lib/model.js';
-import { usd, usdShort, pct, int, pctDelta, DASH } from '../lib/fmt.js';
+import { usd, usdShort, pct, int, pctDelta, esc, DASH } from '../lib/fmt.js';
 import { play } from '../lib/sound.js';
 
 const h = (tag, cls, html) => {
@@ -656,7 +656,7 @@ export function renderDashboard({ data, params, onNavigate, setInspectorContent 
 
   setInspectorContent?.(`
     <p class="semi">${title}</p>
-    <p class="muted">${hall === 'combined' ? 'Both halls' : data.locations.find((l) => l.id === hall)?.name ?? hall}</p>
+    <p class="muted">${esc(hall === 'combined' ? 'Both halls' : data.locations.find((l) => l.id === hall)?.name ?? hall)}</p>
     <p class="inspector-section-label">Where these numbers come from</p>
     <p class="muted">The metric store, rolled up through the product categories —
       the same path as the session screen and Reporting. Not the monthly summary

@@ -26,7 +26,7 @@
 
 import { metricsFor, sessionTotals } from '../lib/model.js';
 import { monthSeries, hallMatches } from '../lib/charts.js';
-import { usd, usd2, pct, int, DASH } from '../lib/fmt.js';
+import { usd, usd2, pct, int, esc, DASH } from '../lib/fmt.js';
 import { play } from '../lib/sound.js';
 
 const h = (tag, cls, html) => {
@@ -220,10 +220,10 @@ export function renderUnitEconomics({ data, params, onNavigate, setInspectorCont
   for (const a of ASSUMPTIONS) {
     const wrap = h('label', 'assump-row');
     const value = a.unit === 'money' ? (assumptions[a.key] / 100).toFixed(2) : assumptions[a.key];
-    wrap.innerHTML = `<span class="assump-label">${a.label}</span>
-      <input type="number" step="${a.unit === 'money' ? '0.01' : '0.5'}" value="${value}"
-             data-key="${a.key}" data-unit="${a.unit}">
-      <span class="dim assump-note">${a.note}</span>`;
+    wrap.innerHTML = `<span class="assump-label">${esc(a.label)}</span>
+      <input type="number" step="${a.unit === 'money' ? '0.01' : '0.5'}" value="${esc(value)}"
+             data-key="${esc(a.key)}" data-unit="${esc(a.unit)}">
+      <span class="dim assump-note">${esc(a.note)}</span>`;
     wrap.querySelector('input').addEventListener('change', (ev) => {
       const raw = Number(ev.target.value);
       if (!Number.isFinite(raw)) return;
@@ -239,7 +239,7 @@ export function renderUnitEconomics({ data, params, onNavigate, setInspectorCont
   /* ---- the bridge ---- */
   const panel = h('section', 'panel');
   panel.append(h('h3', 'panel-title',
-    `${data.locations.find((l) => l.id === selected.location_id)?.name ?? ''} · ${selected.event_date}`));
+    `${esc(data.locations.find((l) => l.id === selected.location_id)?.name ?? '')} · ${esc(selected.event_date)}`));
 
   const picker = h('div', 'filter-bar');
   for (const e of events.slice(0, 10)) {
@@ -256,10 +256,10 @@ export function renderUnitEconomics({ data, params, onNavigate, setInspectorCont
   const body = t.querySelector('tbody');
   for (const l of econ.lines) {
     body.insertAdjacentHTML('beforeend', `<tr class="${l.total ? 'is-bold' : ''}">
-      <td>${l.label}</td>
+      <td>${esc(l.label)}</td>
       <td class="num ${l.value !== null && l.value < 0 ? 'tone-neg' : ''}">${
         l.value === null ? DASH : usd(l.value)}</td>
-      <td class="dim">${l.assumed ? '<span class="assumed">assumed</span> ' : ''}${l.note ?? ''}</td>
+      <td class="dim">${l.assumed ? '<span class="assumed">assumed</span> ' : ''}${esc(l.note)}</td>
     </tr>`);
   }
   panel.append(t);
@@ -285,7 +285,7 @@ export function renderUnitEconomics({ data, params, onNavigate, setInspectorCont
 
   setInspectorContent?.(`
     <p class="semi">Unit economics</p>
-    <p class="muted">${selected.event_date}</p>
+    <p class="muted">${esc(selected.event_date)}</p>
     <p class="inspector-section-label">Real against assumed</p>
     <p class="muted">Gross, payouts, net and attendance come from the metric
       store. Cost of goods is the actual purchase cost of the boxes opened, from

@@ -134,7 +134,9 @@ for (const [name, call] of runtimes) {
     assert.equal(outgoing.url, 'https://api.anthropic.com/v1/messages');
     assert.equal(outgoing.key, sharedKey);
     assert.match(outgoing.body.system[0].text, /Flash is a card product/);
-    assert.equal((await send({ ...question, context: { blob: 'x'.repeat(MAX_BODY_BYTES) } })).status, 400);
+    const huge = await send({ ...question, context: { blob: 'x'.repeat(MAX_BODY_BYTES) } });
+    assert.equal(huge.status, 413);
+    assert.match(huge.result.error, /too much data/);
     assert.equal((await send('not json')).status, 400);
     for (let i = 1; i < 10; i++) assert.equal((await send(question)).status, 200);
     assert.equal((await send(question)).status, 429);
@@ -215,7 +217,7 @@ test('edge: a declared Content-Length over the cap is refused before reading', a
   const r = await callEdge({ pool: null, apiKey: sharedKey, authenticate: async () => 'viewer',
     fetchImpl: () => assert.fail('no upstream') },
   { path: 'ask-sar', method: 'POST', body: JSON.stringify(question), headers: { 'content-length': String(MAX_BODY_BYTES + 1) } });
-  assert.equal(r.status, 400);
+  assert.equal(r.status, 413);
 });
 
 /* ---- Edge environment wiring --------------------------------------------- */

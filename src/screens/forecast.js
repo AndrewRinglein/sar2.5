@@ -244,7 +244,7 @@ export function renderForecast({
       const dp = l.f.totals.profit - base.totals.profit;
       tr.innerHTML = `<td class="name">${l.name}${l.scenario && l.scenario.hall !== state.hall
           ? ` <span class="dim">(saved for ${l.scenario.hall === 'all' ? 'both halls' : hallName(l.scenario.hall)})</span>` : ''}</td>
-        <td class="name dim">${l.note}</td>
+        <td class="name dim">${esc(l.note)}</td>
         <td>${money(l.f.totals.gross)}</td>
         <td>${money(l.f.totals.net)}</td>
         <td>${money(l.f.totals.expenses.total)} ${assumedTag}</td>
@@ -297,7 +297,7 @@ function slotSpreadSentence(prep, hall, hallName) {
   if (usable.length < 2) return '';
   usable.sort((a, b) => b.meanGross - a.meanGross);
   const hi = usable[0]; const lo = usable[usable.length - 1];
-  const label = (b) => `${hallName(b.locationId)} ${DOW[b.weekday]} ${sessionType(b.type).toLowerCase()}`;
+  const label = (b) => `${hallName(b.locationId)} ${DOW[b.weekday]} ${esc(sessionType(b.type).toLowerCase())}`;
   return `Right now ${label(hi)} averages ${(hi.meanGross / lo.meanGross).toFixed(1)} times
     ${label(lo)}, which is why the nights left matter more than the days left.`;
 }
@@ -318,7 +318,7 @@ function headNotices({ base, roster, sched, lastData, todayDay, hallName }) {
   if (base.unprojectable.length) {
     const by = new Map();
     for (const s of base.unprojectable) by.set(s.slot, { ...s, count: (by.get(s.slot)?.count ?? 0) + 1 });
-    const list = [...by.values()].map((s) => `${hallName(s.locationId)} ${DOW[s.dow]} ${sessionType(s.type).toLowerCase()}
+    const list = [...by.values()].map((s) => `${hallName(s.locationId)} ${DOW[s.dow]} ${esc(sessionType(s.type).toLowerCase())}
       (${s.count} night${s.count === 1 ? '' : 's'}, ${s.n} past session${s.n === 1 ? '' : 's'})`).join('; ');
     out.push(`<strong>${base.unprojectable.length} expected session${base.unprojectable.length === 1 ? ' has' : 's have'}
       too little history to value</strong> and ${base.unprojectable.length === 1 ? 'is' : 'are'} not in the totals:
@@ -367,9 +367,9 @@ function driversPanel({ state, onLive, onCommit, go }) {
   for (const d of DRIVERS) {
     const lim = DRIVER_LIMITS[d.key];
     const row = h('label', 'fc-drv');
-    row.innerHTML = `<span class="fc-drv-l">${d.label}<small>${d.note}</small></span>
+    row.innerHTML = `<span class="fc-drv-l">${esc(d.label)}<small>${esc(d.note)}</small></span>
       <input type="range" min="${lim.min}" max="${lim.max}" step="${lim.step}"
-        value="${state.drivers[d.key]}" data-key="${d.key}" aria-label="${d.label} change">
+        value="${esc(state.drivers[d.key])}" data-key="${esc(d.key)}" aria-label="${esc(d.label)} change">
       <span class="fc-drv-v"></span>`;
     const input = row.querySelector('input');
     labels.set(d.key, row.querySelector('.fc-drv-v'));
@@ -564,12 +564,12 @@ function lastTime(s) {
   const hol = s.holiday;
   if (hol.owner) {
     return `Closed — confirmed by owner${hol.owner.confirmed
-      ? ` (${dateShort(hol.owner.confirmed)} ${hol.owner.confirmed.slice(0, 4)})` : ''}`;
+      ? ` (${dateShort(hol.owner.confirmed)} ${esc(hol.owner.confirmed.slice(0, 4))})` : ''}`;
   }
   if (hol.history === 'none') return `${esc(hol.name)} — holiday, no history`;
-  const when = `${dateShort(hol.lastDate)} ${hol.lastDate.slice(0, 4)}`;
+  const when = `${dateShort(hol.lastDate)} ${esc(hol.lastDate.slice(0, 4))}`;
   if (hol.level === 'session') {
-    return `${sessionType(s.type)} session ${hol.history === 'closed' ? 'not held' : 'held'} last ${esc(hol.name)} (${when})`;
+    return `${esc(sessionType(s.type))} session ${hol.history === 'closed' ? 'not held' : 'held'} last ${esc(hol.name)} (${when})`;
   }
   return `Hall ${hol.history === 'closed' ? 'closed' : 'open'} last ${esc(hol.name)} (${when})`;
 }
@@ -618,7 +618,7 @@ function holidayPanel({ f, state, hallName, onLive, onCommit }) {
         aria-label="Open ${esc(s.holiday.name)} ${s.date} ${esc(s.type)} session anyway">` : ''}</td>
       <td class="name">${DOW[s.dow]} ${dateShort(s.date)} ${s.date.slice(0, 4)}</td>
       <td class="name">${esc(s.holiday.name)}</td><td class="name">${hallName(s.locationId)}</td>
-      <td class="name">${sessionType(s.type)}</td><td class="name">${last}</td><td class="name">${status}</td>`;
+      <td class="name">${esc(sessionType(s.type))}</td><td class="name">${last}</td><td class="name">${status}</td>`;
     const box = tr.querySelector('input');
     box?.addEventListener('change', () => {
       if (box.checked) state.open.add(key); else state.open.delete(key);
@@ -662,7 +662,7 @@ function sessionsPanel(f, base, hallName) {
     body.insertAdjacentHTML('beforeend', `<tr class="${s.state === 'missing' ? 'is-flagged' : ''}">
       <td class="name">${DOW[s.dow]} ${dateShort(s.date)}</td>
       <td class="name">${hallName(s.locationId)}</td>
-      <td class="name">${sessionType(s.type)}</td>
+      <td class="name">${esc(sessionType(s.type))}</td>
       <td>${p ? money(s.gross) : DASH}</td>
       <td class="dim">${p && s.sdGross ? `± ${usdShort(s.sdGross)}` : DASH}</td>
       <td>${p ? money(s.net) : DASH}</td>
@@ -705,7 +705,7 @@ function slotsPanel({ prep, state, hallName, onLive, onCommit }) {
       tr.innerHTML = `<td class="name"><input type="checkbox" ${state.off.has(s.slot) ? '' : 'checked'}
           aria-label="Include ${DOW[s.weekday]} ${esc(s.type)} at this hall"></td>
         <td class="name">${hallName(s.locationId)}</td><td class="name">${DOW[s.weekday]}</td>
-        <td class="name">${sessionType(s.type)}</td>
+        <td class="name">${esc(sessionType(s.type))}</td>
         <td>${int(b?.n)}${b?.usable ? '' : ' <span class="dim">too few</span>'}</td>
         <td>${int(s.runs)}</td>
         <td>${b ? money(b.meanGross) : DASH}</td>
@@ -728,7 +728,7 @@ function slotsPanel({ prep, state, hallName, onLive, onCommit }) {
   const stopped = prep.stopped.filter(inHall);
   if (stopped.length) {
     panel.append(h('p', 'muted so-small', `<strong>Not projected — stopped running:</strong> ${
-      stopped.map((s) => `${hallName(s.locationId)} ${DOW[s.weekday]} ${sessionType(s.type).toLowerCase()}
+      stopped.map((s) => `${hallName(s.locationId)} ${DOW[s.weekday]} ${esc(sessionType(s.type).toLowerCase())}
         (last ${dateShort(s.lastDate)} ${s.lastDate.slice(0, 4)}, ${s.runs} in the last ${RUNNING_WINDOW_WEEKS} weeks)`).join('; ')}.`));
   }
   return panel;
@@ -782,7 +782,7 @@ function backtestPanel(bt, hall) {
       <td class="name">${monthFull(m.month)}</td>
       <td>${int(m.projected.sessions)} / ${int(m.actual.sessions)}${m.projected.unprojectable
         ? ` <span class="dim">(+${m.projected.unprojectable} unvalued)</span>` : ''}${m.projected.closed
-        ? ` <span class="dim" title="${m.projected.closedNights.map((c) => `${c.date} ${c.holiday}`).join(', ')}">(${m.projected.closed} closed for a holiday)</span>` : ''}</td>
+        ? ` <span class="dim" title="${esc(m.projected.closedNights.map((c) => `${c.date} ${c.holiday}`).join(', '))}">(${m.projected.closed} closed for a holiday)</span>` : ''}</td>
       <td>${money(m.projected.gross)}</td><td>${money(m.actual.gross)}</td>
       <td class="${Math.abs(m.errGross ?? 0) > 0.1 ? 'tone-neg' : ''}">${pctDelta(m.errGross)}</td>
       <td>${m.inRange.gross ? 'yes' : '<span class="tone-neg">no</span>'}</td>

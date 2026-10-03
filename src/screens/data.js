@@ -18,7 +18,7 @@
 import { metricsFor, sessionTotals, getMetric } from '../lib/model.js';
 import { monthSeries, monthFull, monthKey, hallMatches } from '../lib/charts.js';
 import { toCsv, csvMoney, csvPct, csvFilename, download } from '../lib/csv.js';
-import { usd, int, pct, weekday, DASH } from '../lib/fmt.js';
+import { usd, int, pct, weekday, esc, DASH } from '../lib/fmt.js';
 import { play } from '../lib/sound.js';
 
 const h = (tag, cls, html) => {
@@ -396,8 +396,8 @@ export function renderData({ data, params, onNavigate, setInspectorContent }) {
           const f = (v) => (v === null || v === undefined ? ''
             : l.format === 'integer' ? int(v) : usd(v));
           body.insertAdjacentHTML('beforeend', `<tr>
-            <td>${l === r.lines[0] ? r.header : ''}</td>
-            <td>${l.label}</td>
+            <td>${l === r.lines[0] ? esc(r.header) : ''}</td>
+            <td>${esc(l.label)}</td>
             <td class="num">${f(l.stored)}</td>
             <td class="num">${f(l.computed)}</td>
             <td class="num ${bad ? 'st-poor' : 'dim'}">${
@@ -418,7 +418,7 @@ export function renderData({ data, params, onNavigate, setInspectorContent }) {
     : monthlyColumns(data, { hall, from, to });
 
   panel.append(h('h3', 'panel-title',
-    `${VIEWS.find((v) => v.id === view).label} · ${hallName}`));
+    `${esc(VIEWS.find((v) => v.id === view).label)} · ${esc(hallName)}`));
 
   const tools = h('div', 'filter-bar');
   const sheetBtn = h('button', 'chip');
@@ -447,14 +447,14 @@ export function renderData({ data, params, onNavigate, setInspectorContent }) {
     <tr><th class="sheet-num"></th><th class="sheet-label"></th>${
       cols.map((_, i) => `<th class="num">${columnLetter(i)}</th>`).join('')}</tr>
     <tr><th class="sheet-num">#</th><th class="sheet-label">Metric</th>${
-      cols.map((c) => `<th class="num sheet-head">${c.header}</th>`).join('')}</tr>
+      cols.map((c) => `<th class="num sheet-head">${esc(c.header)}</th>`).join('')}</tr>
     </thead><tbody></tbody>`;
 
   const body = table.querySelector('tbody');
   rows.forEach((row, i) => {
     const tr = h('tr', row.bold ? 'is-bold' : (row.key ? '' : 'is-spacer'));
     tr.innerHTML = `<td class="sheet-num">${i + 1}</td>
-      <td class="sheet-label">${row.label}</td>${
+      <td class="sheet-label">${esc(row.label)}</td>${
       cols.map((c) => {
         const v = cellValue(row, c, view);
         // The spreadsheet's own total against its line items — a real check
@@ -463,7 +463,7 @@ export function renderData({ data, params, onNavigate, setInspectorContent }) {
           && c.sourceSales !== null && Math.abs(c.sourceSales - c.totals.revenue) > 100;
         return `<td class="num${flag ? ' sheet-flag' : ''}"${
           flag ? ` title="Sheet total ${usd(c.sourceSales)}, line items ${usd(c.totals.revenue)}"` : ''
-        }>${formatCell(v, row)}${flag ? ' ⚠' : ''}</td>`;
+        }>${esc(formatCell(v, row))}${flag ? ' ⚠' : ''}</td>`;
       }).join('')}`;
     body.append(tr);
   });
@@ -493,8 +493,8 @@ export function renderData({ data, params, onNavigate, setInspectorContent }) {
   root.append(panel);
 
   setInspectorContent?.(`
-    <p class="semi">${VIEWS.find((v) => v.id === view).label}</p>
-    <p class="muted">${hallName} · ${cols.length} columns</p>
+    <p class="semi">${esc(VIEWS.find((v) => v.id === view).label)}</p>
+    <p class="muted">${esc(hallName)} · ${cols.length} columns</p>
     <p class="inspector-section-label">Reading the sheet</p>
     <p class="muted">Rows are metrics and columns are sessions, as the original
       spreadsheet reads. Total Sales is exactly the sum of the sales rows shown,

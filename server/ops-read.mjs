@@ -68,8 +68,11 @@ export const VALIDATOR_SQL = [
   "  to_char(r.session_time, 'HH24:MI') AS session_time, r.slot_name, r.status,",
   '  r.closed_at, r.updated_at,',
   `  r.state #>> ${path(VALIDATOR_STATE_PATHS.staff_status)} AS staff_status,`,
+  // Every crew field is read as TEXT (->>), never as jsonb (->): a nested
+  // object under `slot` can then never reach the browser. projectValidatorRow
+  // turns slot back into an integer, or null.
   `  COALESCE((SELECT jsonb_agg(jsonb_build_object(${VALIDATOR_CREW_FIELDS.map((f) =>
-    (f === 'slot' ? `'${f}', e.value -> '${f}'` : `'${f}', e.value ->> '${f}'`)).join(', ')}) ORDER BY e.ord)`,
+    `'${f}', e.value ->> '${f}'`).join(', ')}) ORDER BY e.ord)`,
   `    FROM jsonb_array_elements(CASE WHEN jsonb_typeof(r.state #> ${path(VALIDATOR_STATE_PATHS.crew)}) = 'array'`,
   `      THEN r.state #> ${path(VALIDATOR_STATE_PATHS.crew)} ELSE '[]'::jsonb END) WITH ORDINALITY AS e(value, ord)), '[]'::jsonb) AS crew,`,
   `  r.state #>> ${path(VALIDATOR_STATE_PATHS.commission_rate)} AS commission_rate,`,

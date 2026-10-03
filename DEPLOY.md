@@ -29,12 +29,16 @@ That is all. The key stays on Supabase; it is never sent to the browser. (Option
 
 The database connection needs no setup: Supabase gives every Edge Function its own project's connection (`SUPABASE_DB_URL`). The function reads only the allowlisted columns, in a read-only transaction, over a verified TLS connection.
 
+### Security clean-up and the Ask SAR daily limit (owner, once)
+
+Open **SQL Editor** in each of the two Supabase projects, the **Operational DB** (`lkcfbgnuodqzvowschjn`) and **Vanguard SAR + Com + Finances** (`bstcgfjvtdajgcdpjisg`), paste `scripts/owner-security.sql` and run it. It is safe to run twice. It removes the old link-token read functions (`ops_read`, `sar_read`, `sar_read_items`), which SAR 2.0 no longer uses but which still answer anyone holding an old link; marks every old link token revoked (nothing is deleted); and, in the Operational DB only, creates `sar2_ask_usage`, the table that makes the Ask SAR daily limit (100 questions and 3,000,000 characters per person per Pacific day, `src/lib/ask-limits.js`) survive restarts. Until it exists — and always on the laptop, whose `sar_reader` login is read-only — the same limit is counted in memory instead.
+
 ### What is deployed (for whoever deploys)
 
-- `supabase/functions/sar2-api/index.ts` — the whole function in one generated file (entrypoint `index.ts`). It is built from `server/edge-entry.mjs`, the shared server code (`server/api-core.mjs`, `server/edge-api.mjs`, `server/ops-read.mjs`, `server/competitive.mjs`, `src/lib/ops-schema.js`, `src/lib/config.js`) and `knowledge/bingo-knowledge.md`. Its only import is `npm:pg@8`.
+- `supabase/functions/sar2-api/index.ts` — the whole function in one generated file (entrypoint `index.ts`). It is built from `server/edge-entry.mjs`, the shared server code (`server/api-core.mjs`, `server/edge-api.mjs`, `server/ops-read.mjs`, `server/competitive.mjs`, `src/lib/ops-schema.js`, `src/lib/ask-limits.js`, `src/lib/config.js`) and `knowledge/bingo-knowledge.md`. Its only import is `npm:pg@8`.
 - `supabase/config.toml` — sets `verify_jwt = false` for `sar2-api`. This is required: the sign-in token comes from the analytics project, not the Operational DB, so Supabase's own check would refuse every request. The function does its own check instead.
 
-After changing anything under `server/`, `src/lib/config.js`, `src/lib/ops-schema.js` or `knowledge/`, run `npm run build:edge`, commit the regenerated `index.ts`, and redeploy (for example `supabase functions deploy sar2-api --project-ref lkcfbgnuodqzvowschjn --no-verify-jwt`). `npm test` fails if the committed bundle is out of date. **Editing the knowledge file changes the hosted Ask SAR only after a rebuild and redeploy**; the laptop picks it up immediately.
+After changing anything under `server/`, `src/lib/config.js`, `src/lib/ops-schema.js`, `src/lib/ask-limits.js` or `knowledge/`, run `npm run build:edge`, commit the regenerated `index.ts`, and redeploy (for example `supabase functions deploy sar2-api --project-ref lkcfbgnuodqzvowschjn --no-verify-jwt`). `npm test` fails if the committed bundle is out of date. **Editing the knowledge file changes the hosted Ask SAR only after a rebuild and redeploy**; the laptop picks it up immediately.
 
 ## Running SAR locally (the laptop)
 

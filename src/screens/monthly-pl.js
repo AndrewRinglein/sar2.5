@@ -16,7 +16,7 @@
    ========================================================================== */
 
 import { metricsFor, sessionTotals, delta } from '../lib/model.js';
-import { usd, usdShort, pct, pctDelta, int, arrow, monthLabel, DASH } from '../lib/fmt.js';
+import { usd, usdShort, pct, pctDelta, int, arrow, monthLabel, esc, DASH } from '../lib/fmt.js';
 
 const h = (tag, cls, html) => {
   const el = document.createElement(tag);
@@ -94,9 +94,9 @@ export function renderMonthlyPL({ data, params, onNavigate, setInspectorContent 
 
   const rung = (label, value, note, tone) => `
     <tr>
-      <td class="name">${label}</td>
+      <td class="name">${esc(label)}</td>
       <td class="${tone ?? ''}">${usd(value)}</td>
-      <td class="dim">${note ?? ''}</td>
+      <td class="dim">${esc(note)}</td>
     </tr>`;
 
   const table = h('table', 'cat-table');
@@ -105,7 +105,7 @@ export function renderMonthlyPL({ data, params, onNavigate, setInspectorContent 
     <tbody>
       ${rung('Gross sales', latest.revenue, `${int(latest.sessions)} sessions`)}
       ${latest.categories.map((c) => `
-        <tr><td class="name" style="padding-left:var(--s-5)">${c.name}</td>
+        <tr><td class="name" style="padding-left:var(--s-5)">${esc(c.name)}</td>
             <td class="dim">${usd(c.revenue)}</td>
             <td class="dim">${pct(latest.revenue ? c.revenue / latest.revenue : null)} of gross</td></tr>`).join('')}
       ${rung('Payouts', -latest.payout,
@@ -174,7 +174,7 @@ export function renderMonthlyPL({ data, params, onNavigate, setInspectorContent 
 
   setInspectorContent?.(`
     <p class="semi">Monthly P&amp;L</p>
-    <p class="muted">${hall === 'all' ? 'Both halls' : data.locations.find((l) => l.id === hall)?.name}</p>
+    <p class="muted">${esc(hall === 'all' ? 'Both halls' : data.locations.find((l) => l.id === hall)?.name)}</p>
     <p class="inspector-section-label">${completeCount} complete months</p>
     <dl class="inspector-filters">
       <dt>Latest</dt><dd>${monthLabel(latest.month)}</dd>

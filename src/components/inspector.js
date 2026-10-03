@@ -10,6 +10,8 @@
    rather than as idle.
    ========================================================================== */
 
+import { esc } from '../lib/fmt.js';
+
 export function renderInspector() {
   const el = document.createElement('aside');
   el.className = 'inspector';
@@ -41,11 +43,11 @@ export function setInspector(inspector, content) {
 export function inspectorIdle({ screenLabel, description, filters = [] } = {}) {
   const rows = filters.length
     ? `<dl class="inspector-filters">${filters
-        .map((f) => `<dt>${f.label}</dt><dd>${f.value}</dd>`).join('')}</dl>`
+        .map((f) => `<dt>${esc(f.label)}</dt><dd>${esc(f.value)}</dd>`).join('')}</dl>`
     : '<p class="dim">No filters applied.</p>';
   return `
-    <p class="semi">${screenLabel ?? ''}</p>
-    ${description ? `<p class="muted">${description}</p>` : ''}
+    <p class="semi">${esc(screenLabel)}</p>
+    ${description ? `<p class="muted">${esc(description)}</p>` : ''}
     <p class="inspector-section-label">Filters in force</p>
     ${rows}`;
 }

@@ -95,7 +95,7 @@ export function renderVenues({ data, params, onNavigate, setInspectorContent }) 
     const shortfall = r.expected !== null ? r.expected - r.sessions : null;
     const card = h('section', 'panel');
     card.innerHTML = `
-      <h3 class="panel-title">${r.loc.name}</h3>
+      <h3 class="panel-title">${esc(r.loc.name)}</h3>
       <dl class="jp-stats" style="grid-template-columns:repeat(3,minmax(0,1fr))">
         <dt>Gross</dt><dd>${usd(r.revenue)}</dd>
         <dt>Contribution</dt><dd>${usd(r.net)}</dd>
@@ -128,12 +128,12 @@ export function renderVenues({ data, params, onNavigate, setInspectorContent }) 
   }</tr></thead><tbody></tbody>`;
   const sbody = st.querySelector('tbody');
   for (const r of rows) {
-    sbody.insertAdjacentHTML('beforeend', `<tr><td class="name">${r.loc.name}</td>${
+    sbody.insertAdjacentHTML('beforeend', `<tr><td class="name">${esc(r.loc.name)}</td>${
       DOW.map((d) => {
         const cfg = r.schedule?.[d];
         return `<td class="${cfg ? '' : 'dim'}">${cfg
-          ? `${cfg.count}<span class="dim" style="font-size:var(--t-xs)"> ${
-              (cfg.types ?? []).join('+')}</span>`
+          ? `${esc(cfg.count)}<span class="dim" style="font-size:var(--t-xs)"> ${
+              esc((cfg.types ?? []).join('+'))}</span>`
           : DASH}</td>`;
       }).join('')
     }</tr>`);
@@ -148,10 +148,10 @@ export function renderVenues({ data, params, onNavigate, setInspectorContent }) 
   const totalRev = rows.reduce((s, r) => s + r.revenue, 0);
   setInspectorContent?.(`
     <p class="semi">Venues</p>
-    <p class="muted">Last ${days} days, to ${latest}</p>
+    <p class="muted">Last ${int(days)} days, to ${esc(latest)}</p>
     <p class="inspector-section-label">Share of gross</p>
     <dl class="inspector-filters">
-      ${rows.map((r) => `<dt>${r.loc.name}</dt><dd>${
+      ${rows.map((r) => `<dt>${esc(r.loc.name)}</dt><dd>${
         pct(totalRev ? r.revenue / totalRev : null)} · ${usd(r.revenue)}</dd>`).join('')}
     </dl>
     <p class="inspector-section-label">Capacity</p>

@@ -1,6 +1,6 @@
 # Bingo Scout in SAR2
 
-Added October 1, 2026 (Pacific), using the user-supplied `C:/Users/aring/Desktop/Competition/bingo-scout-v2.html`. An unchanged reference copy is retained at `public/reference/bingo-scout-v2.html` (SHA256 E886653B72DBB3792040E5F8A11D0F01C34FA1BD1886C182411F13762FB3E89A). That reference is historical and includes other states; the integrated screen uses the California collection.
+Added October 1, 2026 (Pacific), using the user-supplied `C:/Users/aring/Desktop/Competition/bingo-scout-v2.html`. An unchanged reference copy is retained at `docs/reference/bingo-scout-v2.html` (SHA256 E886653B72DBB3792040E5F8A11D0F01C34FA1BD1886C182411F13762FB3E89A). It was moved out of `public/` on 2 October 2026 so it is no longer deployed: it lists third-party halls' phone numbers and emails and loads CDN scripts without integrity hashes, which must not be served from the app's own origin without sign-in. That reference is historical and includes other states; the integrated screen uses the California collection.
 
 ## Open
 

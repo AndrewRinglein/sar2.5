@@ -23,7 +23,7 @@ import {
   jackpotMaxPayout, jackpotFill, jackpotStatus, sinceLastHit,
   jackpotParticipation, mean,
 } from '../lib/model.js';
-import { usd, usdShort, pct, int, dateShort, dateLong, DASH } from '../lib/fmt.js';
+import { usd, usdShort, pct, int, dateShort, dateLong, esc, DASH } from '../lib/fmt.js';
 
 const h = (tag, cls, html) => {
   const el = document.createElement(tag);
@@ -106,7 +106,7 @@ function jackpotCard(jp, ctx, hallId) {
   const card = h('section', 'panel');
   card.innerHTML = `
     <div class="jp-head">
-      <h3 class="panel-title" style="margin:0">${jp.name}</h3>
+      <h3 class="panel-title" style="margin:0">${esc(jp.name)}</h3>
       <span class="jp-scope dim">${jp.scope === 'org_wide' ? 'shared across both halls' : 'this hall'}</span>
       ${status ? `<span class="jp-status jp-${status.toLowerCase()}">${status}</span>` : ''}
       <span class="jp-balance">${usd(current.balance)}</span>
@@ -161,7 +161,7 @@ function gremlinPanel(ctx, hallId) {
   for (const r of rows.slice(0, 20)) {
     const hall = ctx.locations.find((l) => l.id === r.e.location_id)?.name ?? DASH;
     body.insertAdjacentHTML('beforeend',
-      `<tr><td class="name">${dateLong(r.e.event_date)}</td><td>${hall}</td>
+      `<tr><td class="name">${dateLong(r.e.event_date)}</td><td>${esc(hall)}</td>
            <td class="tone-neg">${usd(r.v)}</td></tr>`);
   }
   const total = rows.reduce((s, r) => s + r.v, 0);
@@ -207,13 +207,13 @@ export function renderJackpots({ data, params, onNavigate, setInspectorContent }
   const hallName = data.locations.find((l) => l.id === hallId)?.name ?? DASH;
   setInspectorContent?.(`
     <p class="semi">Jackpots</p>
-    <p class="muted">${hallName}</p>
+    <p class="muted">${esc(hallName)}</p>
     <p class="inspector-section-label">Configured</p>
     <dl class="inspector-filters">
       ${configured.map((jp, i) => `
-        <dt>${jp.name}</dt>
+        <dt>${esc(jp.name)}</dt>
         <dd>${built[i].status ?? DASH}${built[i].since === null
-          ? ', never hit' : `, ${built[i].since} since hit`}</dd>`).join('')}
+          ? ', never hit' : `, ${int(built[i].since)} since hit`}</dd>`).join('')}
     </dl>
     <p class="inspector-section-label">How the cap works</p>
     <p class="muted">The fill bar is scaled to the 90th percentile of past

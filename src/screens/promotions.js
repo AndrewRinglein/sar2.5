@@ -142,8 +142,8 @@ export function renderPromotions({ data, params, onNavigate, setInspectorContent
       for (const r of rows) {
         const tr = document.createElement('tr');
         tr.innerHTML = `<td>${weekday(r.event.event_date).slice(0, 3)} ${dateShort(r.event.event_date)}</td>
-          <td>${r.hall}</td>
-          <td>${sessionType(r.event.event_type)}</td>
+          <td>${esc(r.hall)}</td>
+          <td>${esc(sessionType(r.event.event_type))}</td>
           <td class="promo-note"><button type="button" class="cell-link">${esc(r.note)}</button></td>
           <td class="num">${int(r.attendance)}</td>
           <td class="num">${usd(r.gross)}</td>

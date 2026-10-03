@@ -244,7 +244,7 @@ export function renderCommission({ data, params, onNavigate, setInspectorContent
     const note = h('div', 'mg-notice');
     note.innerHTML = `<strong>${flagged.length} session${flagged.length === 1 ? '' : 's'}
       look like test data</strong> and ${includeFlagged ? 'are included below' : 'are hidden'} —
-      ${flagged[0].flags.join(', ')}. Showing these as somebody's earnings would
+      ${flagged[0].flags.map(esc).join(', ')}. Showing these as somebody's earnings would
       be worse than showing nothing. `;
     const btn = h('button', 'mg-name');
     btn.type = 'button';
@@ -289,8 +289,8 @@ export function renderCommission({ data, params, onNavigate, setInspectorContent
       const gap = r.poolGap !== null && Math.abs(r.poolGap) > 1;
       body.insertAdjacentHTML('beforeend', `<tr class="${r.flags.length ? 'is-flagged' : ''}">
         <td>${r.date ? dateShort(r.date) : DASH}</td>
-        <td>${r.hall ?? DASH}</td>
-        <td>${r.part ?? DASH}</td>
+        <td>${esc(r.hall ?? DASH)}</td>
+        <td>${esc(r.part ?? DASH)}</td>
         <td class="num">${r.sales === null ? DASH : usd(r.sales)}</td>
         <td class="num">${r.rate === null ? DASH : pct(r.rate)}</td>
         <td class="num">${r.targetRpa === null ? DASH : usd2(r.targetRpa)}${
@@ -319,8 +319,8 @@ export function renderCommission({ data, params, onNavigate, setInspectorContent
       const body = t.querySelector('tbody');
       for (const p of people) {
         body.insertAdjacentHTML('beforeend', `<tr>
-          <td>${esc(p.name)}</td><td class="num">${p.sessions}</td>
-          <td class="num">${p.shares}</td>
+          <td>${esc(p.name)}</td><td class="num">${esc(p.sessions)}</td>
+          <td class="num">${esc(p.shares)}</td>
           <td class="num">${usd(p.total)}</td>
           <td class="num dim">${p.average === null ? DASH : usd(p.average)}</td></tr>`);
       }

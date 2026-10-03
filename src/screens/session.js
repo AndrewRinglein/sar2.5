@@ -45,6 +45,13 @@ const h = (tag, cls, html) => {
   return el;
 };
 
+/** Like h(), but the content is TEXT. For anything typed by a person. */
+const text = (tag, cls, value) => {
+  const el = h(tag, cls);
+  el.textContent = value ?? '';
+  return el;
+};
+
 /** "+$1,234" / "-$1,234" / "$0". The sign leads the currency symbol. */
 const signed = (v) => (v === null || v === undefined ? DASH : `${v > 0 ? '+' : ''}${usd(v || 0)}`);
 
@@ -77,7 +84,7 @@ function pickerCard(ev, ctx, selected) {
   card.setAttribute('aria-pressed', String(selected));
   card.innerHTML = `
     <span class="sess-when">${weekday(ev.event_date).slice(0, 3)} ${dateShort(ev.event_date)}</span>
-    <span class="sess-type">${sessionType(ev.event_type)}</span>
+    <span class="sess-type">${esc(sessionType(ev.event_type))}</span>
     <span class="sess-gross">${usdShort(t.revenue)}</span>
     <span class="sess-delta ${d ? `tone-${d.tone}` : 'dim'}">
       ${d ? `${arrow(d.dir)} ${pctDelta(d.relative)}` : `pool ${st.n}/${MIN_POOL}`}
@@ -142,7 +149,7 @@ function renderPicker(ctx, { onPick, from, onFrom }) {
     const list = sel && !shown.includes(sel) && !older.includes(sel) ? [sel, ...older] : older;
     for (const e of list) {
       opts.push(`<option value="${esc(e.id)}"${e.id === ctx.selectedId && !shown.includes(e) ? ' selected' : ''}>
-        ${weekday(e.event_date).slice(0, 3)} ${dateShort(e.event_date)} ${e.event_date.slice(0, 4)} · ${sessionType(e.event_type)}</option>`);
+        ${weekday(e.event_date).slice(0, 3)} ${dateShort(e.event_date)} ${esc(e.event_date.slice(0, 4))} · ${esc(sessionType(e.event_type))}</option>`);
     }
     prev.innerHTML = opts.join('');
     prev.disabled = list.length === 0;
@@ -480,7 +487,7 @@ function renderDrivers(t, ctx) {
     const w = ((Math.abs(r.impact) / maxAbs) * 50).toFixed(1);
     const row = h('div', `sd-driver${r.residual ? ' is-residual' : ''}`);
     row.innerHTML = `
-      <span class="sd-driver-name">${r.label}</span>
+      <span class="sd-driver-name">${esc(r.label)}</span>
       <span class="sd-driver-detail dim">${detail(r)}</span>
       <span class="sd-driver-bar" aria-hidden="true"><span class="sd-driver-mid"></span>
         <i class="${r.residual ? 'is-residual' : pos ? 'is-pos' : 'is-neg'}" style="${pos ? 'left' : 'right'}:50%;width:${w}%"></i></span>
@@ -527,7 +534,7 @@ function renderBand(ev, ctx) {
   const panel = h('section', 'panel sd-band');
   const head = h('div', 'sd-panel-head');
   head.append(h('h3', 'panel-title', 'Net vs expected range'),
-    h('span', 'dim sd-sub', `last 30 ${weekday(ev.event_date)} ${sessionType(ev.event_type).toLowerCase()} sessions · band = 95% of the 12 before each`));
+    h('span', 'dim sd-sub', `last 30 ${weekday(ev.event_date)} ${esc(sessionType(ev.event_type).toLowerCase())} sessions · band = 95% of the 12 before each`));
   panel.append(head);
 
   const rows = expectedBand(slotSeries(ev, ctx));
@@ -565,7 +572,7 @@ function renderLadder(t) {
     tr.innerHTML = `
       <td class="name">${esc(r.label)}</td>
       <td class="${r.kind === 'missing' ? 'dim' : (r.value < 0 ? 'tone-neg' : '')}">${r.kind === 'missing' ? DASH : usd(r.value)}</td>
-      <td class="name dim">${r.note ?? ''}</td>`;
+      <td class="name dim">${esc(r.note)}</td>`;
     body.append(tr);
   }
   table.append(body);
@@ -627,7 +634,7 @@ function renderJackpots(ev, m, ctx) {
     const row = h('div', 'jp');
     row.innerHTML = `
       <div class="jp-head">
-        <span class="jp-name">${j.name}</span>
+        <span class="jp-name">${esc(j.name)}</span>
         <span class="jp-scope dim">${j.scope === 'org_wide' ? 'both halls' : 'this hall'}</span>
         ${status ? `<span class="jp-status jp-${status.toLowerCase()}">${status}</span>` : ''}
         <span class="jp-balance">${usd(balance)}</span>
@@ -835,7 +842,7 @@ function renderJackpotsPage(ev, t, m, ctx) {
         <td>${usd(r.balance)}</td>
         <td>${r.players === null ? DASH : int(r.players)}</td>
         <td>${r.pctAtt === null ? DASH : pct(r.pctAtt, { decimals: 0 })}</td>
-        <td class="name"><span class="sd-status is-${r.status.replace(' ', '-').toLowerCase()}">${r.status}</span></td>`;
+        <td class="name"><span class="sd-status is-${esc(String(r.status).replace(' ', '-').toLowerCase())}">${esc(r.status)}</span></td>`;
       body.append(tr);
     }
     const T = table.total;
@@ -950,7 +957,7 @@ function renderSummary(ev, t, m, ctx) {
     <div class="sd-stat" data-key="bingo-vs-pt">
       <div class="sd-stat-label">Bingo as % of pull tab profit</div>
       <div class="sd-stat-value">${bvp.pct === null ? DASH : pct(bvp.pct)}</div>
-      <div class="sd-stat-detail dim">${bvp.detail ?? 'Needs bingo and pull-tab figures'}</div>
+      <div class="sd-stat-detail dim">${esc(bvp.detail ?? 'Needs bingo and pull-tab figures')}</div>
     </div>`;
   pl.append(stats);
   root.append(pl);
@@ -994,8 +1001,8 @@ export function renderCrew(ev, ctx, onNavigate) {
   );
   if (clash) {
     wrap.innerHTML = `<span class="crew-label">Crew</span>
-      <span class="dim">Not matched — ${clash.ops} scheduled,
-      ${clash.events} with results on this day</span>`;
+      <span class="dim">Not matched — ${int(clash.ops)} scheduled,
+      ${int(clash.events)} with results on this day</span>`;
     return wrap;
   }
 
@@ -1018,9 +1025,9 @@ export function renderCrew(ev, ctx, onNavigate) {
       btn.addEventListener('click', () => onNavigate('managers', {
         tab: 'person', staff: person.staffId, role,
       }));
-      slot.append(h('span', 'crew-role', role), btn);
+      slot.append(text('span', 'crew-role', role), btn);
     } else {
-      slot.append(h('span', 'crew-role', role), h('span', 'crew-none', DASH));
+      slot.append(text('span', 'crew-role', role), h('span', 'crew-none', DASH));
     }
     wrap.append(slot);
   }
@@ -1041,7 +1048,7 @@ function renderValidatorCrew(wrap, v, onNavigate) {
   for (const role of roles) {
     const people = v.crew.filter((c) => c.role === role);
     const slot = h('span', 'crew-slot');
-    slot.append(h('span', 'crew-role', role));
+    slot.append(text('span', 'crew-role', role));
     if (!people.length) {
       slot.append(h('span', 'crew-none', DASH));
     } else {
@@ -1124,7 +1131,7 @@ export function renderSession({ data, params = {}, onNavigate, setInspectorConte
   const head = h('div', 'screen-head');
   head.innerHTML = `
     <h2>${esc(hall)} · ${dateLong(ev.event_date)}</h2>
-    <p class="muted">${sessionType(ev.event_type)} session</p>`;
+    <p class="muted">${esc(sessionType(ev.event_type))} session</p>`;
   root.append(head);
 
   root.append(renderCrew(ev, ctx, onNavigate));
@@ -1165,7 +1172,7 @@ export function renderSession({ data, params = {}, onNavigate, setInspectorConte
   const n = pool.length;
   setInspectorContent?.(`
     <p class="semi">${dateLong(ev.event_date)}</p>
-    <p class="muted">${esc(hall)} · ${sessionType(ev.event_type)}</p>
+    <p class="muted">${esc(hall)} · ${esc(sessionType(ev.event_type))}</p>
     <p class="inspector-section-label">This night</p>
     <dl class="inspector-filters">
       <dt>Gross</dt><dd>${usd(t.revenue)}</dd>

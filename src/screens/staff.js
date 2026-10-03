@@ -276,8 +276,13 @@ const TYPE = { not_taken: 'Not taken', taken_late: 'Taken late', waived_not_waiv
    Screen
 --------------------------------------------------------------------------- */
 
-export function renderStaff({ data, params = {}, onNavigate, setInspectorContent }) {
+export function renderStaff({ data, params: raw = {}, onNavigate, setInspectorContent }) {
   const root = h('div', 'screen');
+  // `period` comes from the URL. Anything that is not a real ISO date would
+  // throw a RangeError deep in the pay-period arithmetic and blank the screen,
+  // so it is dropped here and the default period is used instead.
+  const validPeriod = /^\d{4}-\d{2}-\d{2}$/.test(raw.period ?? '') && Number.isFinite(Date.parse(raw.period));
+  const params = validPeriod || !raw.period ? raw : { ...raw, period: undefined };
   const tab = TABS.find((t) => t.id === params.tab)?.id ?? 'overview';
   const sched = data.schedule;
 
@@ -451,7 +456,7 @@ function renderOverview(root, data, sched, params, go) {
   const todays = payPeriod(today);
   const usingDefault = !params.period;
   head.append(h('p', 'so-facts', `
-    <span><strong>Scheduler data:</strong> ${dateShort(m.window.start)} – ${dateShort(m.window.end)} ${m.window.end.slice(0, 4)}</span>
+    <span><strong>Scheduler data:</strong> ${dateShort(m.window.start)} – ${dateShort(m.window.end)} ${esc(m.window.end.slice(0, 4))}</span>
     <span><strong>Workweek:</strong> Monday–Sunday</span>
     <span><strong>Counted:</strong> ${COUNTED_STATUSES.join(' and ')} sessions</span>`));
   head.append(h('p', 'muted so-small',
@@ -603,8 +608,8 @@ function rosterPanel(m, params, go, hallName) {
 
   const basisCell = (r) => {
     if (!r.basis) return `<span class="dim">${DASH}</span>`;
-    if (r.basis === 'mixed') return `<span class="so-basis">mixed</span> <span class="dim">${r.basisDays.actual} actual, ${r.basisDays.scheduled} sched.</span>`;
-    return `<span class="so-basis">${r.basis}</span>`;
+    if (r.basis === 'mixed') return `<span class="so-basis">mixed</span> <span class="dim">${int(r.basisDays.actual)} actual, ${int(r.basisDays.scheduled)} sched.</span>`;
+    return `<span class="so-basis">${esc(r.basis)}</span>`;
   };
   const cols = [
     { key: 'name', label: 'Name', cls: 'name', cell: (r) => `${esc(r.name)}${r.known ? (r.active ? '' : ' <span class="dim">(inactive)</span>') : ' <span class="dim">(not on roster)</span>'}` },
@@ -769,8 +774,8 @@ function seventhPanel(m) {
 const HALL_ORDER = ['sc', 'rwc'];
 
 /** "12 Aug – 1 Oct 2026", or one date. */
-const spanText = (a, b) => (a === b ? `${dateShort(a)} ${a.slice(0, 4)}`
-  : `${dateShort(a)}${a.slice(0, 4) === b.slice(0, 4) ? '' : ` ${a.slice(0, 4)}`} – ${dateShort(b)} ${b.slice(0, 4)}`);
+const spanText = (a, b) => (a === b ? `${dateShort(a)} ${esc(a.slice(0, 4))}`
+  : `${dateShort(a)}${a.slice(0, 4) === b.slice(0, 4) ? '' : ` ${esc(a.slice(0, 4))}`} – ${dateShort(b)} ${esc(b.slice(0, 4))}`);
 
 const MATCH_NOTE = {
   none: 'not matched to the scheduler',

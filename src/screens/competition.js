@@ -9,6 +9,9 @@ const node = (tag, cls, html) => { const e = document.createElement(tag); e.clas
 const usd = dollars => centsUsd(dollars * 100);
 const link = (url, title) => safeUrl(url) ? `<a href="${esc(safeUrl(url))}" target="_blank" rel="noopener noreferrer">${esc(title)} ↗</a>` : '';
 const money = n => Number.isFinite(n) && n > 0 ? usd(n) : 'Unknown';
+// Counts arrive from the collector over the network. They are interpolated into
+// HTML, so anything that is not a finite number becomes 0 rather than markup.
+const num = v => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 const STORE = 'sar2-competitive-scenarios-v1';
 const categoryLabel=h=>(h.category||'Type not yet classified').replaceAll('_',' ');
 const statusLabel=h=>/uncertain|confirmation|unresolved/.test(h.operatingStatus||'')?'Needs confirmation':(h.operatingStatus||'Current operation not verified').replaceAll('_',' ');
@@ -33,7 +36,7 @@ export function renderCompetition({ request = serverRequest, params = {}, onNavi
   const persist = () => { try { localStorage.setItem(STORE, JSON.stringify(scenarios)); } catch { status.textContent = 'Scenario could not be saved in this browser. Export it to keep a copy.'; } };
   const halls = () => (snapshot?.halls || []).filter(h => !h.excludedFromCoverage && !h.duplicateOf && h.competitionEligibility?.status === 'qualified');
   const allEvidence = hall => evidenceFor(hall, histories.get(hall.id)?.messages || snapshot?.summaries?.find(s => s.hallId === hall.id)?.latest && [snapshot.summaries.find(s => s.hallId === hall.id).latest] || []);
-  const countFor = id => snapshot?.summaries?.find(s => s.hallId === id)?.count || 0;
+  const countFor = id => num(snapshot?.summaries?.find(s => s.hallId === id)?.count);
   const sourceValue = h => {
     const cfg = scenarios[h.id];
     if (cfg?.payout && business(cfg)) return Number(cfg.payout);
@@ -121,7 +124,7 @@ export function renderCompetition({ request = serverRequest, params = {}, onNavi
     const box=node(expanded?'details':'div','scout-coverage');
     box.append(node(expanded?'summary':'p','dim',`City discovery: ${searched} / ${places.length} places searched · ${google} on Google · ${places.length-searched} pending`));
     if(!expanded)return box;
-    box.append(node('p','dim',`Checked ${coverage.checkedAt}. Includes cities and Census-designated communities whose representative point is within 50 miles. A search does not establish complete hall coverage. Remaining Google searches are pending; the Google tab is paused at a CAPTCHA and web search reached a rate limit.`));
+    box.append(node('p','dim',`Checked ${esc(coverage.checkedAt)}. Includes cities and Census-designated communities whose representative point is within 50 miles. A search does not establish complete hall coverage. Remaining Google searches are pending; the Google tab is paused at a CAPTCHA and web search reached a rate limit.`));
     const table=node('table','cat-table');table.innerHTML='<thead><tr><th>City / community</th><th>Discovery</th><th>Google</th></tr></thead>';
     const tbody=node('tbody');
     for(const p of places.slice().sort((a,b)=>a.name.localeCompare(b.name))){
@@ -193,11 +196,11 @@ export function renderCompetition({ request = serverRequest, params = {}, onNavi
     const offers = allEvidence(hall);
     body.append(node('p','', `${offers.length} sources loaded. Each source is a separate dated offer. Partial prizes exclude conditional jackpots; never add different messages or session variants together.`));
     if (historyBusy.has(hall.id)) body.append(node('p','dim','Loading message history…'));
-    if (historyError.has(hall.id)) { body.append(node('p','tone-neg',historyError.get(hall.id))); body.append(button('Retry history',()=>loadHistory(hall.id))); }
+    if (historyError.has(hall.id)) { body.append(node('p','tone-neg',esc(historyError.get(hall.id)))); body.append(button('Retry history',()=>loadHistory(hall.id))); }
     for (const e of offers) {
       const card = node('article','panel scout-evidence');
       card.innerHTML=`<div class="scout-source">${esc(e.channel.toUpperCase())} · ${esc(e.date || 'Date unknown')}</div><h4>${esc(e.title)}</h4><p>${esc(e.label)}</p><p>${link(e.url,'Source')}</p><p class="scout-message">${esc(e.body || '')}</p><p>Buy-in: ${e.buyIns.length ? e.buyIns.map(usd).join(' / ') : 'Not extracted'} · Fixed prize subtotal: ${money(e.subtotal)}${e.advertisedTotal ? ` · Advertised total: ${usd(e.advertisedTotal)}` : ''}</p>`;
-      if (e.groups.length) card.insertAdjacentHTML('beforeend', `<ul>${e.groups.map(g => `<li>${esc(g.label)}: ${g.count} × ${usd(g.prize)}${g.conditional ? ' · conditional; excluded' : ''}</li>`).join('')}</ul>`);
+      if (e.groups.length) card.insertAdjacentHTML('beforeend', `<ul>${e.groups.map(g => `<li>${esc(g.label)}: ${num(g.count)} × ${usd(g.prize)}${g.conditional ? ' · conditional; excluded' : ''}</li>`).join('')}</ul>`);
       if (e.subtotal > 0 || e.advertisedTotal > 0) card.append(button('Use this offer as a scenario starting point', () => {
         const cfg=cfgFor(hall.id); cfg.payout=e.advertisedTotal || e.subtotal; cfg.evidence={id:e.id,date:e.date,title:e.title,channel:e.channel,partial:!e.advertisedTotal}; persist(); tab='business'; draw();
       }));
@@ -222,7 +225,7 @@ export function renderCompetition({ request = serverRequest, params = {}, onNavi
     if (!base) { body.append(node('p','placeholder','Enter valid payout and session assumptions to calculate this scenario.')); return; }
     const stats=node('div','scout-kpis');
     for (const [label,value] of [['Weekly revenue',base.weeklyGross],['Weekly prizes',base.weeklyPayout],['Weekly before expenses',base.weeklyContribution],['Annual revenue',base.annualGross],['Annual profit (assumed)',base.annualProfit]]) {
-      stats.append(node('section','panel',`<small>${label}</small><strong>${value === null ? 'Not estimated' : usd(value)}</strong>`));
+      stats.append(node('section','panel',`<small>${esc(label)}</small><strong>${value === null ? 'Not estimated' : usd(value)}</strong>`));
     }
     body.append(stats);
     if (tab==='projection') {
@@ -243,7 +246,7 @@ export function renderCompetition({ request = serverRequest, params = {}, onNavi
       else {
         const max=Math.max(...series.map(m=>m.gross)), chart=node('div','scout-chart'); chart.setAttribute('aria-label','Monthly projected revenue');
         for (const m of series) {const col=node('div','scout-bar');col.style.height=`${Math.max(1,m.gross/max*100)}%`;col.title=`${m.month}: ${usd(m.gross)} revenue, ${(m.lift*100).toFixed(1)}% lift`;chart.append(col);} body.append(chart);
-        const table=node('table','cat-table');table.innerHTML='<thead><tr><th>Month</th><th>Baseline revenue</th><th>Scenario revenue</th><th>Prizes</th><th>Before expenses</th><th>Modeled lift</th></tr></thead><tbody>'+series.map(m=>`<tr><td>${m.month}</td><td>${usd(m.baseline)}</td><td>${usd(m.gross)}</td><td>${usd(m.payout)}</td><td>${usd(m.contribution)}</td><td>${(m.lift*100).toFixed(1)}%${m.capped?' (capped)':''}</td></tr>`).join('')+'</tbody>';
+        const table=node('table','cat-table');table.innerHTML='<thead><tr><th>Month</th><th>Baseline revenue</th><th>Scenario revenue</th><th>Prizes</th><th>Before expenses</th><th>Modeled lift</th></tr></thead><tbody>'+series.map(m=>`<tr><td>${esc(m.month)}</td><td>${usd(m.baseline)}</td><td>${usd(m.gross)}</td><td>${usd(m.payout)}</td><td>${usd(m.contribution)}</td><td>${(m.lift*100).toFixed(1)}%${m.capped?' (capped)':''}</td></tr>`).join('')+'</tbody>';
         const scroll=node('div','scout-table');scroll.append(table);body.append(scroll);
       }
     }

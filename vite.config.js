@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv } from 'vite';
 import { readFileSync } from 'node:fs';
 import { localApiPlugin } from './server/local-api.mjs';
+import { cspPlugin } from './scripts/csp.mjs';
 
 // The ONE place the version comes from. package.json -> __APP_VERSION__.
 // SAR 1.0 required updating it in seven places by hand (SPEC §2.6).
@@ -31,6 +32,9 @@ export default defineConfig(({ mode }) => ({
         .replace(/%THEME_COLOR%/g, tokenValue('rail'))
         .replace(/%APP_VERSION%/g, version);
     },
-  }],
+  },
+  // Content-Security-Policy as a <meta> tag, BUILD ONLY (GitHub Pages cannot
+  // send headers; the dev server's HMR needs what the policy forbids).
+  cspPlugin()],
   build: { outDir: 'dist', emptyOutDir: true, sourcemap: true },
 }));

@@ -104,7 +104,7 @@ function card(aspect, value, active) {
       c.style.color = aspect.colour;
     }
   }
-  c.innerHTML = `<span class="mcard-label">${aspect.label}</span>
+  c.innerHTML = `<span class="mcard-label">${esc(aspect.label)}</span>
                  <span class="mcard-value">${aspect.fmt(value)}</span>`;
   return c;
 }
@@ -166,7 +166,7 @@ export function renderLeaderboard({ data, params, onNavigate, setInspectorConten
 
   if (!sorted.length) {
     root.append(h('div', 'placeholder',
-      `<p class="semi">No sessions in this period</p><p class="dim">${period.label}.</p>`));
+      `<p class="semi">No sessions in this period</p><p class="dim">${esc(period.label)}.</p>`));
     return root;
   }
 
@@ -181,9 +181,9 @@ export function renderLeaderboard({ data, params, onNavigate, setInspectorConten
     const name = h('button', 'lb-name');
     name.type = 'button';
     name.title = 'Open this session';
-    name.innerHTML = `<span class="lb-hall">${hallName}</span>
+    name.innerHTML = `<span class="lb-hall">${esc(hallName)}</span>
       <span class="dim">${weekday(r.event.event_date).slice(0, 3)}
-      ${dateShort(r.event.event_date)} · ${sessionType(r.event.event_type)}</span>`;
+      ${dateShort(r.event.event_date)} · ${esc(sessionType(r.event.event_type))}</span>`;
     name.addEventListener('click', () => onNavigate('session', { id: r.event.id }));
 
     const cards = h('div', 'lb-cards');
@@ -221,16 +221,16 @@ export function renderLeaderboard({ data, params, onNavigate, setInspectorConten
   const bestHall = best ? data.locations.find((l) => l.id === best.event.location_id)?.name : null;
 
   setInspectorContent?.(`
-    <p class="semi">Sorted by ${aspect.label}</p>
+    <p class="semi">Sorted by ${esc(aspect.label)}</p>
     <p class="muted">${descending ? 'Highest first' : 'Lowest first'} ·
-      ${period.label} ·
-      ${hall === 'all' ? 'both halls' : data.locations.find((l) => l.id === hall)?.name ?? ''}</p>
+      ${esc(period.label)} ·
+      ${esc(hall === 'all' ? 'both halls' : data.locations.find((l) => l.id === hall)?.name ?? '')}</p>
     <p class="inspector-section-label">Across ${sorted.length} session${sorted.length === 1 ? '' : 's'}</p>
     <dl class="inspector-filters">
       <dt>Mean</dt><dd>${values.length ? aspect.fmt(mean(values)) : DASH}</dd>
       <dt>Median</dt><dd>${values.length ? aspect.fmt(median(values)) : DASH}</dd>
       <dt>Top</dt><dd>${best ? aspect.fmt(aspect.get(best.totals)) : DASH}</dd>
-      <dt>Held by</dt><dd>${best ? `${bestHall}, ${dateShort(best.event.event_date)}` : DASH}</dd>
+      <dt>Held by</dt><dd>${best ? `${esc(bestHall)}, ${dateShort(best.event.event_date)}` : DASH}</dd>
       <dt>Unmeasured</dt><dd>${sorted.length - values.length}</dd>
     </dl>
     <p class="inspector-section-label">Sorting</p>

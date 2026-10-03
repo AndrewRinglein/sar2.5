@@ -87,15 +87,27 @@ export const VALIDATOR_FORBIDDEN = Object.freeze([
  * after the query as a second line of defence, so even a future edit to the SQL
  * that selected more could not ship it to the browser.
  */
+/**
+ * A crew slot as an integer, or null. The SQL reads it as text ('3'); anything
+ * that is not a whole number — an object, an array, '2.5', '' — is null.
+ */
+export function slotOf(value) {
+  if (typeof value === 'number') return Number.isSafeInteger(value) ? value : null;
+  if (typeof value !== 'string' || !/^-?\d+$/.test(value.trim())) return null;
+  const n = Number(value);
+  return Number.isSafeInteger(n) ? n : null;
+}
+
 export function projectValidatorRow(row = {}) {
   const out = {};
   for (const c of VALIDATOR_COLUMNS) out[c] = row[c] ?? null;
   const crew = Array.isArray(row.crew) ? row.crew : [];
-  out.crew = crew.filter((e) => e && typeof e === 'object').map((e) => {
-    const x = {};
-    for (const f of VALIDATOR_CREW_FIELDS) x[f] = e[f] ?? null;
-    return x;
-  });
+  out.crew = crew.filter((e) => e && typeof e === 'object').map((e) => ({
+    // Text is text: a nested value is dropped, not passed through.
+    name: typeof e.name === 'string' ? e.name : null,
+    role: typeof e.role === 'string' ? e.role : null,
+    slot: slotOf(e.slot),
+  }));
   return out;
 }
 
@@ -108,16 +120,51 @@ export const MANAGER_ROLES = Object.freeze(['MOD', 'Paymaster', 'Flash Manager']
  * Narrowed deliberately from a blanket ban on anything containing "pay" or
  * "comm": commission is explicitly permitted, so `commission_pool`,
  * `payout_amount` and `shares` are allowed by name below. What stays banned is
- * anything that prices a PERSON'S TIME — wages, salaries, hourly rates and the
- * meal and rest premiums in `sched_time_entries`.
+ * anything that prices a PERSON'S TIME — wages, salaries, hourly and base
+ * rates, overtime pay and the meal and rest premiums in `sched_time_entries`.
+ *
+ * Matched by TOKEN, not by prefix. The first version, /(^|_)(wage|salary|...)/,
+ * let `pay_rate`, `base_rate`, `regular_rate`, `overtime_rate`, `gross_pay`,
+ * `ot_pay`, `pay` and `compensation` through: none of them starts with a
+ * banned word. Now a column is split on `_` and banned if ANY token is a pay
+ * word — and the unambiguous words are banned even inside a token, so
+ * `basepay`, `payrate` and `hourlywage` are caught too.
+ *
+ * This is the one definition. The reader-login SQL test and the server read
+ * both go through `isPayColumn`.
  */
-const PAY_PATTERN = /(^|_)(wage|salary|hourly|premium|earn|bonus|tip|salaried)/i;
-
-/** Permitted despite looking like pay. Commission is public here. */
-const PAY_ALLOWED = new Set([
-  'commission_pool', 'payout_amount', 'shares', 'total_shares',
-  'session_date', 'confirmed_at',
+/** Banned when they are a whole `_`-separated token. Short, so token-only. */
+export const PAY_TOKENS = Object.freeze([
+  'pay', 'pays', 'rate', 'rates', 'tip', 'tips', 'comp', 'earn', 'earns', 'earned',
+  'wage', 'wages', 'salary', 'salaries', 'salaried', 'hourly', 'premium', 'premiums',
+  'earning', 'earnings', 'bonus', 'bonuses', 'compensation',
 ]);
+/** Banned anywhere in the name: no legitimate column contains them. */
+const PAY_WORDS = /wage|salar|hourly|premium|bonus|compensation|earning|payroll|payrate|paycheck|basepay|grosspay|netpay/i;
+const TOKENS = new Set(PAY_TOKENS);
+
+/**
+ * Permitted despite matching: each is a SESSION or SALES figure, or the
+ * commission this app is allowed to show — never what a person is paid for
+ * their time. Adding to this list is a privacy decision; say why beside it.
+ */
+export const PAY_ALLOWED = Object.freeze(new Set([
+  'comm_rate',          // sched_sessions: the session's commission RATE (a percentage of sales)
+  'commission_rate',    // recon_sessions projection: the same rate as the validator records it
+  'commission_target',  // recon_sessions projection: the RPA target the rate applies above
+  'target_rpa',         // revenue per attendee target — a sales figure
+  'actual_rpa',         // revenue per attendee — a sales figure
+  'price_per_ticket',   // products: the price a customer pays for a ticket
+  'commission_pool', 'payout_amount', 'shares', 'total_shares',   // commission, permitted
+  'session_date', 'confirmed_at',
+]));
+
+/** Is this column individual pay? The single test every guard uses. */
+export function isPayColumn(column) {
+  const col = String(column).trim().toLowerCase();
+  if (!col || PAY_ALLOWED.has(col)) return false;
+  return PAY_WORDS.test(col) || col.split(/[^a-z0-9]+/).some((t) => TOKENS.has(t));
+}
 
 /**
  * Assert the allowlist contains no pay column. Called by the test suite.
@@ -134,7 +181,7 @@ export function assertNoPayColumns(columns = {
   for (const [table, cols] of Object.entries(columns)) {
     for (const c of cols.split(',')) {
       const col = c.trim();
-      if (!PAY_ALLOWED.has(col) && PAY_PATTERN.test(col)) bad.push(`${table}.${col}`);
+      if (isPayColumn(col)) bad.push(`${table}.${col}`);
     }
   }
   if (bad.length) throw new Error(`ops.js: pay columns are forbidden: ${bad.join(', ')}`);
