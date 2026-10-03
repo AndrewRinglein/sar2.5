@@ -93,3 +93,13 @@ test('a date with a slash in params survives the round trip', () => {
   const h = buildHash('session', { note: 'a/b?c=d' });
   assert.equal(parseHash(h).params.note, 'a/b?c=d');
 });
+
+test('the real app shell wires every route the rail offers', async () => {
+  const { readFileSync } = await import('node:fs');
+  const main = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
+  const { SCREENS } = await import('../src/lib/router.js');
+  const block = (name) => main.slice(main.indexOf(`const ${name} = {`), main.indexOf('};', main.indexOf(`const ${name} = {`)));
+  const wired = block('BUILT') + block('LAZY');
+  const missing = Object.keys(SCREENS).filter((id) => !new RegExp(`(^|[\\s{,'])'?${id}'?\\s*:`, 'm').test(wired));
+  assert.deepEqual(missing, [], `routes with no screen in main.js: ${missing.join(', ')}`);
+});

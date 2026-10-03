@@ -20,6 +20,7 @@ import {
   bootstrap, getPromotions, getMonthlySummary, getNotifications, currentUser as whoami, NotSignedIn, NoAccess,
 } from './lib/api.js';
 import { CUSTOMER_ID } from './lib/config.js';
+import { esc } from './lib/fmt.js';
 import { startRouter, navigate, activeItem, SCREENS } from './lib/router.js';
 import { renderRail, setActive } from './components/rail.js';
 import { renderInspector, setInspector, inspectorIdle, wireInspector } from './components/inspector.js';
@@ -218,9 +219,35 @@ function buildShell(data) {
  * one, and must never look like an empty database.
  */
 let currentRoute = null;
+let mounted = null;
+
+/**
+ * Screens loaded on first use, with their own styles. Bingo Scout carries
+ * ~200 KB of hall data and Leaflet, which the other screens never need.
+ */
+const LAZY = {
+  competition: () => Promise.all([
+    import('./screens/competition.js'),
+    import('./competition.css'),
+    import('leaflet/dist/leaflet.css'),
+  ]).then(([m]) => m.renderCompetition),
+};
+
+/** Release the previous screen (maps, timers) before showing the next one. */
+function unmount() {
+  try { mounted?.dispose?.(); } catch { /* a screen's cleanup must not block navigation */ }
+  mounted = null;
+}
+
+function mountScreen(node) {
+  mounted = node;
+  contentEl.replaceChildren(node);
+  contentEl.scrollTop = 0;
+}
 
 function renderScreen(route, data) {
   currentRoute = route;
+  unmount();
   const screen = SCREENS[route.screen];
 
   // Exactly one nav item active — asserted at runtime, not assumed. SPEC §18.
@@ -251,14 +278,31 @@ function renderScreen(route, data) {
     notifications: renderNotifications,
   };
 
+  const props = {
+    data,
+    params: route.params,
+    onNavigate: (id, params) => navigate(id, params),
+    setInspectorContent: (html) => setInspector(inspectorEl, html),
+  };
+
   if (BUILT[route.screen]) {
-    contentEl.replaceChildren(BUILT[route.screen]({
-      data,
-      params: route.params,
-      onNavigate: (id, params) => navigate(id, params),
-      setInspectorContent: (html) => setInspector(inspectorEl, html),
-    }));
-    contentEl.scrollTop = 0;
+    mountScreen(BUILT[route.screen](props));
+    return;
+  }
+
+  if (LAZY[route.screen]) {
+    const waiting = document.createElement('div');
+    waiting.className = 'placeholder';
+    waiting.innerHTML = '<p class="semi">Loading…</p>';
+    mountScreen(waiting);
+    LAZY[route.screen]().then((render) => {
+      if (currentRoute !== route) return; // the user has moved on
+      mountScreen(render(props));
+    }).catch(() => {
+      if (currentRoute !== route) return;
+      waiting.innerHTML = `<p class="semi">${esc(screen.label)} could not be loaded</p>
+        <p class="dim">Check the connection and reload the page.</p>`;
+    });
     return;
   }
 
