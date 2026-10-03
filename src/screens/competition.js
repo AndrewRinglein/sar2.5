@@ -31,7 +31,7 @@ export function renderCompetition({ request = serverRequest, params = {}, onNavi
     maxMinutes = 120, minOverlap = 0, band = '', historical = false, map, mapGeneration = 0, loadGeneration = 0;
   const histories = new Map(), historyBusy = new Set(), historyError = new Map(), scenarios = saved();
   // Inbox: which hall cards are open, the day being read, and each day's updates.
-  const inboxOpen = new Set(); let inboxDay = validDay(params.day) || hallToday(); const days = new Map(), dayBusy = new Set(), dayError = new Map();
+  const inboxOpen = new Set(); let dayOpen = false; let inboxDay = validDay(params.day) || hallToday(); const days = new Map(), dayBusy = new Set(), dayError = new Map();
   let dirStatus = '', dirQuery = '';
   const maps = new Set();
   const clearMaps=()=>{for(const instance of maps)instance.remove();maps.clear();map=null;};
@@ -242,16 +242,19 @@ export function renderCompetition({ request = serverRequest, params = {}, onNavi
     body.append(node('p','dim',`${cards.length} halls have sent ${num(totals.total)} updates: ${num(totals.sms)} texts and ${num(totals.email)} emails, newest first. Each hall is one card, matched by its hall ID, never by the sending number (many halls share one short code). Welcome, verification and enrollment messages are left out. Calls are not collected.`));
 
     // One day across every hall.
-    const daySec = node('section','panel scout-day');
+    // Collapsed by default so the hall cards lead; it says how many there are.
+    const daySec = node('details','panel scout-day'); daySec.open = dayOpen;
+    daySec.addEventListener('toggle', () => { dayOpen = daySec.open; });
+    const loaded = days.has(inboxDay) ? dayRows(days.get(inboxDay), snapshot.halls || []) : null;
+    daySec.append(node('summary','', `Every hall, one day: ${esc(inboxDay)}${loaded ? ` · ${loaded.length} update${loaded.length===1?'':'s'}` : ''}`));
     const dayHead = node('div','scout-filters');
-    dayHead.append(node('h4','', 'Updates on'));
     dayHead.append(input('Day', inboxDay, v => { const d = validDay(v); if (!d) return; inboxDay = d; draw(); loadDay(d); }, { type: 'date' }));
     dayHead.append(button('Today', () => { inboxDay = hallToday(); draw(); loadDay(inboxDay); }, inboxDay === hallToday()));
     daySec.append(dayHead);
     if (dayBusy.has(inboxDay)) daySec.append(node('p','dim','Loading…'));
     if (dayError.has(inboxDay)) { daySec.append(node('p','tone-neg',esc(dayError.get(inboxDay)))); daySec.append(button('Retry',()=>{dayError.delete(inboxDay);loadDay(inboxDay);})); }
-    if (days.has(inboxDay)) {
-      const rows = dayRows(days.get(inboxDay), snapshot.halls || []);
+    if (loaded) {
+      const rows = loaded;
       if (!rows.length) daySec.append(node('p','dim','No updates collected on this day.'));
       else { const ul = node('ul','scout-msgs'); for (const r of rows) ul.append(messageItem(r,{showHalls:true})); daySec.append(ul); }
     } else if (!dayBusy.has(inboxDay) && !dayError.has(inboxDay)) { daySec.append(node('p','dim','Loading…')); const d=inboxDay; setTimeout(()=>loadDay(d),0); }

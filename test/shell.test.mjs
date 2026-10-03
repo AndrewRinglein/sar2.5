@@ -62,3 +62,10 @@ test('cached reads are unwrapped before screens see them', () => {
   assert.match(main, /unwrap\(notes\.value\)/);
   assert.match(main, /unwrap\(promotions\.value\)/);
 });
+
+test('a saved copy up to a day old opens the app; older than five minutes refreshes behind it', () => {
+  assert.match(main, /bootstrap\(\{ maxAge: SAVED_MAX_AGE_MS \}\)/);
+  assert.match(main, /Date\.now\(\) - data\.at > CACHE_TTL_MS\s*\? refreshInBackground\(data, current\)/);
+  const api = readFileSync(new URL('../src/lib/api.js', import.meta.url), 'utf8');
+  assert.match(api, /const fresh = hit && \(Date\.now\(\) - hit\.at\) < maxAge;/);
+});

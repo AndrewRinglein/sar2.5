@@ -266,9 +266,9 @@ export async function clearCache() {
  * refreshes behind it. A cold open shows something rather than a spinner; a
  * warm open shows last-known rather than nothing when the network is down.
  */
-async function cached(key, loader, { force = false } = {}) {
+async function cached(key, loader, { force = false, maxAge = CACHE_TTL_MS } = {}) {
   const hit = await cacheGet(key);
-  const fresh = hit && (Date.now() - hit.at) < CACHE_TTL_MS;
+  const fresh = hit && (Date.now() - hit.at) < maxAge;
   if (fresh && !force) return { data: hit.value, stale: false, at: hit.at };
 
   try {
@@ -308,7 +308,7 @@ async function all(build) {
 --------------------------------------------------------------------------- */
 
 /** Tenant config — branding, timezone, currency, jackpot and schedule settings. */
-export async function getConfig({ force } = {}) {
+export async function getConfig({ force, maxAge } = {}) {
   return cached('config', async () => {
     const { data, error } = await supabase
       .from('analytics_config')
@@ -317,22 +317,22 @@ export async function getConfig({ force } = {}) {
       .maybeSingle();
     if (error) throw error;
     return data;
-  }, { force });
+  }, { force, maxAge });
 }
 
 /** Metric definitions. `canonical_key` is what joins a metric to a category. */
-export async function getMetricDefinitions({ force } = {}) {
+export async function getMetricDefinitions({ force, maxAge } = {}) {
   return cached('metric_defs', () => all(() => supabase
     .from('analytics_metric_definitions')
     .select('id, key, canonical_key, display_name, display_order, metric_type, data_type, aggregation, is_computed, formula, is_active')
     .eq('customer_id', CUSTOMER_ID)
     .eq('is_active', true)
     .order('display_order')
-    .order('id')), { force });
+    .order('id')), { force, maxAge });
 }
 
 /** Product categories, with their per-tenant colours. */
-export async function getProductCategories({ force } = {}) {
+export async function getProductCategories({ force, maxAge } = {}) {
   return cached('categories', async () => {
     const cats = await all(() => supabase
       .from('analytics_product_categories')
@@ -356,7 +356,7 @@ export async function getProductCategories({ force } = {}) {
       revenue_keys: links.filter((l) => l.category_id === c.id && l.role === 'revenue').map((l) => l.metric_key),
       payout_keys:  links.filter((l) => l.category_id === c.id && l.role === 'payout').map((l) => l.metric_key),
     }));
-  }, { force });
+  }, { force, maxAge });
 }
 
 /**
@@ -366,7 +366,7 @@ export async function getProductCategories({ force } = {}) {
  * SAR 1.0 hides them from the dropdown but still counts them in comparison
  * totals, so the fleet numbers include people who no longer work there.
  */
-export async function getRunners({ force } = {}) {
+export async function getRunners({ force, maxAge } = {}) {
   return cached('runners', async () => {
     const runners = await all(() => supabase
       .from('flash_runners')
@@ -392,17 +392,17 @@ export async function getRunners({ force } = {}) {
       // excluded from every figure, not just from the list.
       events: events.filter((e) => activeIds.has(e.runner_id)),
     };
-  }, { force });
+  }, { force, maxAge });
 }
 
 /** Promotions. Empty on production today; read anyway so the screen fills in. */
-export async function getPromotions({ force } = {}) {
+export async function getPromotions({ force, maxAge } = {}) {
   return cached('promotions', async () => all(() => supabase
     .from('promotions')
     .select('id, code, name, description, promo_type, discount_type, discount_value, '
           + 'valid_from, valid_to, max_uses, current_uses, is_active')
     .eq('customer_id', CUSTOMER_ID)
-    .order('id')), { force });
+    .order('id')), { force, maxAge });
 }
 
 /**
@@ -411,13 +411,13 @@ export async function getPromotions({ force } = {}) {
  * store; they stopped tracking the metric store in March 2026, which is
  * exactly what Reconcile exists to show.
  */
-export async function getMonthlySummary({ force } = {}) {
+export async function getMonthlySummary({ force, maxAge } = {}) {
   return cached('monthly-summary', () => all(() => supabase
     .from('analytics_monthly_summary')
     .select('location_id, month, event_count, total_sales, net_sales, total_attendance')
     .eq('customer_id', CUSTOMER_ID)
     .order('location_id')
-    .order('month')), { force });
+    .order('month')), { force, maxAge });
 }
 
 /**
@@ -426,7 +426,7 @@ export async function getMonthlySummary({ force } = {}) {
  * Read only: `notification_reads` is fetched to SHOW what has been read, never
  * written to. Marking read is a write and SAR 2.0 does not write.
  */
-export async function getNotifications({ force } = {}) {
+export async function getNotifications({ force, maxAge } = {}) {
   return cached('notifications', async () => {
     // The newest NOTIFICATION_LIMIT, in one page. (Going through all() would
     // let its paging range override the limit and read every row.)
@@ -451,16 +451,16 @@ export async function getNotifications({ force } = {}) {
         .order('user_id')));
     }
     return { notifications, reads };
-  }, { force });
+  }, { force, maxAge });
 }
 
-export async function getLocations({ force } = {}) {
+export async function getLocations({ force, maxAge } = {}) {
   return cached('locations', () => all(() => supabase
     .from('locations')
     .select('id, name, code, settings')
     .eq('customer_id', CUSTOMER_ID)
     .order('name')
-    .order('id')), { force });
+    .order('id')), { force, maxAge });
 }
 
 /**
@@ -475,7 +475,7 @@ export async function getLocations({ force } = {}) {
  * once, at the display boundary, because SAR 1.0 has defects from code that
  * converted twice and from code that never converted at all.
  */
-export async function getEvents({ since = null, force } = {}) {
+export async function getEvents({ since = null, force, maxAge } = {}) {
   const key = `events:${since ?? 'all'}`;
   return cached(key, async () => {
     const events = await all(() => {
@@ -528,7 +528,7 @@ export async function getEvents({ since = null, force } = {}) {
     }
 
     return { events, metrics };
-  }, { force });
+  }, { force, maxAge });
 }
 
 /**
@@ -537,15 +537,15 @@ export async function getEvents({ since = null, force } = {}) {
  * Deliberately fails loudly rather than returning empty structures — see
  * assertReadable().
  */
-export async function bootstrap({ since = null, force = false } = {}) {
+export async function bootstrap({ since = null, force = false, maxAge = CACHE_TTL_MS } = {}) {
   await assertReadable();
   const [config, metricDefs, categories, locations, events, runners] = await Promise.all([
-    getConfig({ force }),
-    getMetricDefinitions({ force }),
-    getProductCategories({ force }),
-    getLocations({ force }),
-    getEvents({ since, force }),
-    getRunners({ force }),
+    getConfig({ force, maxAge }),
+    getMetricDefinitions({ force, maxAge }),
+    getProductCategories({ force, maxAge }),
+    getLocations({ force, maxAge }),
+    getEvents({ since, force, maxAge }),
+    getRunners({ force, maxAge }),
   ]);
   return {
     config: config.data,

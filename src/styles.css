@@ -212,6 +212,7 @@ input:hover { border-color: var(--ink-4); }
   border-radius: var(--r-sm); padding: var(--s-2) var(--s-4);
   font-size: var(--t-sm); z-index: 50;
 }
+.stale-banner.is-updating { background: var(--surface-2); color: var(--ink-3); border: 1px solid var(--hair); }
 .rail-group-label {
   font-size: var(--t-xs);
   text-transform: uppercase;

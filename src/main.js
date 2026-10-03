@@ -19,7 +19,7 @@ import {
   currentUser, onAuthChange, signInWithGoogle, signInWithPassword, signOut,
   bootstrap, getPromotions, getMonthlySummary, getNotifications, currentUser as whoami, NotSignedIn, NoAccess,
 } from './lib/api.js';
-import { CUSTOMER_ID } from './lib/config.js';
+import { CUSTOMER_ID, CACHE_TTL_MS } from './lib/config.js';
 import { esc } from './lib/fmt.js';
 import { startRouter, navigate, activeItem, SCREENS } from './lib/router.js';
 import { renderRail, setActive } from './components/rail.js';
@@ -396,9 +396,9 @@ function renderScreen(route, data) {
  *
  * Uses the shared local server connection after the SAR session is available.
  */
-export async function loadManagers(data) {
+export async function loadManagers(data, known = null) {
   try {
-    const schedule = await getSchedule();
+    const schedule = known ?? await getSchedule();
     data.schedule = schedule;
     // The data validator arrives with Operations but can fail on its own; the
     // crew model then says "not connected" and the scheduler carries on.
@@ -447,6 +447,51 @@ function teardown() {
 /** Unwrap a cached read ({ data, stale, at }) or pass a plain value through. */
 const unwrap = (r) => (r && typeof r === 'object' && 'data' in r && 'at' in r ? r.data : r);
 
+/** How old saved session data may be and still open the app at once. */
+const SAVED_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Re-read everything from the database while the app stays usable on the
+ * saved copy, then swap the fresh figures in and redraw the screen in view.
+ * A note in the corner says it is happening; if the read fails, the saved
+ * copy stays and the note says how old it is.
+ */
+async function refreshInBackground(data, current) {
+  const note = document.createElement('div');
+  note.className = 'stale-banner is-updating';
+  note.setAttribute('role', 'status');
+  const when = new Date(data.at).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+  note.textContent = `Showing figures saved ${when} · updating…`;
+  shellEl?.append(note);
+  try {
+    const fresh = await bootstrap({ force: true });
+    if (!current()) return;
+    for (const k of ['config', 'metricDefs', 'categories', 'locations', 'events', 'metrics', 'runners', 'runnerEvents', 'stale', 'at']) {
+      data[k] = fresh[k];
+    }
+    data.idx = indexMetrics(data.metricDefs);
+    // The crew and manager models are built from the sessions: rebuild them
+    // on the fresh ones once Operations is in.
+    if (!data.opsLoading && data.schedule) {
+      const schedule = data.schedule;
+      data.schedule = undefined;
+      await loadManagers(data, schedule);
+      if (!current()) return;
+    }
+    note.remove();
+    const r = currentRoute;
+    if (r && r.screen !== 'ask') {
+      const top = contentEl.scrollTop;
+      renderScreen(r, data);
+      contentEl.scrollTop = top;
+    }
+  } catch {
+    if (!current()) return;
+    note.className = 'stale-banner';
+    note.textContent = `Showing figures saved ${when}: the database could not be reached. Reload to try again.`;
+  }
+}
+
 /**
  * Each boot gets a number. A boot that has been overtaken (the user signed
  * out, or in as someone else, while it was still loading) stops at its next
@@ -464,7 +509,10 @@ export async function boot() {
   mount(shell({ status: 'Loading…' }));
 
   try {
-    const data = await bootstrap();
+    // Open on saved data up to a day old; anything older than the usual five
+    // minutes is refreshed behind the open app (refreshSoon, below) instead of
+    // holding the whole app on "Loading…" for the 20 s a full read takes.
+    const data = await bootstrap({ maxAge: SAVED_MAX_AGE_MS });
     if (!current()) return;
     orgName = data.config?.name ?? null;
     // Metric definitions are indexed once, not per screen render: 59 defs
@@ -494,6 +542,9 @@ export async function boot() {
     stopRouter = startRouter((route) => renderScreen(route, data));
     window.SAR = Object.freeze({ version: VERSION, customer: CUSTOMER_ID, data });
 
+    const refreshing = Date.now() - data.at > CACHE_TTL_MS
+      ? refreshInBackground(data, current) : null;
+
     await loadManagers(data);
     if (!current()) return;
     data.opsLoading = false;
@@ -503,6 +554,7 @@ export async function boot() {
       renderScreen(r, data);
       contentEl.scrollTop = top;
     }
+    await refreshing;
   } catch (err) {
     if (!current()) return;
     if (err instanceof NotSignedIn) return mount(signInScreen());
