@@ -57,3 +57,5 @@
 .scout-uncertain { margin:var(--s-4) 0; }
 .scout-uncertain summary { cursor:pointer; }
 td small, td .chip + small { display:block; }
+
+.competition .scout-popup a.scout-website-link { color:var(--website-link); text-decoration:underline; text-underline-offset:0.15em; overflow-wrap:anywhere; }

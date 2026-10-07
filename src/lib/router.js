@@ -42,7 +42,7 @@ export const NAV = Object.freeze([
       { id: 'unit-economics',  label: 'Unit economics', unit: 'U32' },
       { id: 'forecast',        label: 'Forecast',       unit: 'U33' },
       { id: 'venues',          label: 'Venues',         unit: 'U16' },
-      { id: 'competition',     label: 'Bingo Scout',    unit: 'Competitive intelligence' },
+      { id: 'competition',     label: 'Competition',    unit: 'Competitive intelligence' },
     ],
   },
   {

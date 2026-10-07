@@ -1,3 +1,4 @@
+import { play } from '../lib/sound.js';
 /* ============================================================================
    SAR 2.0 — the left rail
 
@@ -51,7 +52,7 @@ export function renderRail({ active, customerName, userEmail, onNavigate, onSign
         a.setAttribute('aria-current', 'page');
       }
       if (onNavigate) {
-        a.addEventListener('click', (e) => { e.preventDefault(); onNavigate(item.id); });
+        a.addEventListener('click', (e) => { e.preventDefault(); play('navigate'); onNavigate(item.id); });
       }
       g.append(a);
     }

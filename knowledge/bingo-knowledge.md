@@ -1,7 +1,21 @@
 # Bingo knowledge for Ask SAR
 
 You can edit this file in Notepad. Plain sentences and short bullet lists work best.
-Ask SAR reads the whole file before answering every question, so what you write here shapes every answer.
+Ask SAR includes this file when General bingo knowledge is switched on. Forecasting context lives separately in `knowledge/forecasting.md`. Local edits are read on the next question; the hosted site uses the last deployed copies, so publish changes with a rebuilt Edge Function.
+
+## Owner context — October 6, 2026
+
+The following is Andrew's account, not an independently verified financial history. Preserve approximate dates and amounts as approximate.
+
+Vanguard is a highly competitive Drum Corps International (DCI) drum and bugle corps. Bingo proceeds help fund young performers' travel and competition. Andrew recalls annual bingo revenue of approximately $24 million several years ago. COVID forced bingo to shut down and disrupted the charity's ability to function; this historical revenue is not a current run rate.
+
+Santa Clara bingo has operated for about 20 years and is described by Andrew as the leading hall in a competitive local market. Redwood City is younger and has grown to three nights per week, operating a little above break-even in his assessment. He believes the third night was added in the last year. Multiple additional halls are being considered, with slow initial growth expected rather than immediate mature-hall results.
+
+The shared "Mega Hopper" promotion allows participation and payouts at both locations and has encouraged some Santa Clara-to-Redwood City crossover. The owner also discusses Hotball and Mega Hotball jackpots; confirm game identifiers before assuming Mega Hopper and Mega Hotball are the same product.
+
+Flash and Strip are the principal business drivers in the owner's assessment; Paper and Cherries are less important strategically. Strip is described as having higher profit margin than Flash, and Santa Clara has recently pushed more Strip sales when attendance is high. Sales effort by the Flash Manager and MOD matters more to the night's sales than the Paymaster's role. Actual data should establish the size of these effects.
+
+The ecommerce platform changed a few months ago and permits advance seat reservations. Some SAR data now comes from that platform. Reservations, attendance, purchases and recognized revenue are different quantities. Use the separate Forecasting context for attendance drivers, RPA, expansion scenarios and expense treatment.
 
 ## How Vanguard runs bingo
 

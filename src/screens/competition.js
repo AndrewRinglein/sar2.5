@@ -4,6 +4,7 @@ import { markets, inMarket, enrollmentLabel, MARKET_RADIUS_MILES } from '../lib/
 import { coverage } from '../lib/competitive-coverage.js';
 import { defaults, evidenceFor, business, projection, proximity, FEATURES, safeUrl, payoutBand } from '../lib/competitive-model.js';
 import { inboxCards, historyRows, dayRows, directory, directoryRows, eligibilityOf, ELIGIBILITY, locationCount, validDay } from '../lib/competitive-inbox.js';
+import { hallPopup } from '../lib/competition-popup.js';
 import { hallToday } from '../lib/fmt.js';
 
 const node = (tag, cls, html) => { const e = document.createElement(tag); e.className = cls || ''; if (html !== undefined) e.innerHTML = html; return e; };
@@ -22,12 +23,12 @@ function saved() { try { const value=JSON.parse(localStorage.getItem(STORE) || '
 
 export function renderCompetition({ request = serverRequest, params = {}, onNavigate, setInspectorContent = () => {} } = {}) {
   const root = node('div', 'screen competition');
-  const header = node('header', 'screen-head', '<h2>Bingo Scout</h2><p>Competitive programs, promotions and payout scenarios</p>');
+  const header = node('header', 'screen-head', '<h2>Competition</h2><p>Competitive programs, promotions and payout scenarios</p>');
   const status = node('p', 'dim', 'Loading the California collection…');
   const controls = node('div', 'scout-controls');
   const body = node('div');
   root.append(header, status, controls, body);
-  let snapshot, selected = params.hall || '', tab = params.area ? 'map' : (['inbox','areas','directory'].includes(params.tab) ? params.tab : 'inbox'), market = markets.some(m=>m.id===params.area) ? params.area : 'bay-area', origin = '', query = '', day = '',
+  let snapshot, selected = params.hall || '', tab = params.area ? 'map' : (['inbox','areas','directory','messages'].includes(params.tab) ? params.tab : 'inbox'), market = markets.some(m=>m.id===params.area) ? params.area : 'bay-area', origin = '', query = '', day = '',
     maxMinutes = 120, minOverlap = 0, band = '', historical = false, map, mapGeneration = 0, loadGeneration = 0;
   const histories = new Map(), historyBusy = new Set(), historyError = new Map(), scenarios = saved();
   // Inbox: which hall cards are open, the day being read, and each day's updates.
@@ -99,8 +100,8 @@ export function renderCompetition({ request = serverRequest, params = {}, onNavi
     if(tab==='inbox'){renderInbox();return;}
     if(tab==='directory'){renderDirectory();return;}
     const tabs = node('nav', 'scout-tabs'); tabs.setAttribute('aria-label', 'Competitive views');
-    for (const [id,title] of [['map','Map'],['evidence','Program evidence'],['business','Business model'],['projection','Projection']]) {
-      tabs.append(button(title, () => { tab = id; draw(); if (selected && id === 'evidence') loadHistory(selected); }, id === tab));
+    for (const [id,title] of [['map','Map'],['messages','Texts and emails'],['evidence','Program evidence'],['business','Business model'],['projection','Projection']]) {
+      tabs.append(button(title, () => { tab = id; draw(); if (selected && ['evidence','messages'].includes(id)) loadHistory(selected); }, id === tab));
     }
     controls.append(tabs);
     if (tab === 'map') return renderMap();
@@ -110,7 +111,8 @@ export function renderCompetition({ request = serverRequest, params = {}, onNavi
     body.append(intro);
     if (/vanguard/i.test(hall.name)) intro.insertAdjacentHTML('beforeend','<p><a href="#/venues">Compare recorded Vanguard results in SAR →</a></p>');
     setInspectorContent(`<h3>${esc(hall.name)}</h3><p>${esc(enrollmentLabel(hall))}</p><p>${countFor(hall.id)} promotional updates collected.</p><p>SMS and email are evidence of advertised offers, not actual sales or payouts.</p>`);
-    if (tab === 'evidence') renderEvidence(hall);
+    if (tab === 'messages') renderMessages(hall);
+    else if (tab === 'evidence') renderEvidence(hall);
     else renderModel(hall);
   }
   function renderAreaMaps() {
@@ -329,13 +331,26 @@ export function renderCompetition({ request = serverRequest, params = {}, onNavi
         if(!center)instance.fitBounds(boundary.getBounds(),{padding:[12,12]});
       }
       for (const {h,p} of rows) if (Number.isFinite(h.location?.lat) && Number.isFinite(h.location?.lng)) {
-        const popup=node('div'); popup.append(button(h.name,()=>{market=regionId;choose(h.id);})); popup.append(node('p','',esc(h.address || '')));
-        popup.append(node('p','',`${esc(categoryLabel(h))} · ${esc(statusLabel(h))}`));
-        popup.append(node('p','',`${countFor(h.id)} updates${p ? ` · ${p.overlap.toFixed(1)}% modeled crossover` : ''}`));
+        const popup=hallPopup(h,snapshot.summaries?.find(s=>s.hallId===h.id),id=>{
+          market=regionId; selected=id; tab='messages'; draw(); loadHistory(id);
+        });
+        if(p)popup.append(node('p','',esc(p.overlap.toFixed(1)+'% modeled crossover')));
         L.circleMarker([h.location.lat,h.location.lng],{radius:h.id===origin?11:7,color:countFor(h.id)?accent:muted,fillOpacity:.75}).addTo(instance).bindPopup(popup);
       }
       if(overview&&regionId==='california'){const points=rows.filter(({h})=>Number.isFinite(h.location?.lat)&&Number.isFinite(h.location?.lng)).map(({h})=>[h.location.lat,h.location.lng]);if(points.length)instance.fitBounds(points,{padding:[18,18],maxZoom:11});}
     } catch { host.textContent='Map could not load. All matching halls remain in the table below.'; }
+  }
+  function renderMessages(hall) {
+    body.append(node('h3','', 'Texts and emails · ' + esc(hall.name)));
+    if(historyBusy.has(hall.id))body.append(node('p','dim','Loading message history…'));
+    if(historyError.has(hall.id)){body.append(node('p','tone-neg',esc(historyError.get(hall.id))),button('Retry history',()=>loadHistory(hall.id)));}
+    const history=histories.get(hall.id);
+    if(history){
+      const rows=historyRows(history.messages,hall.id,snapshot.halls||[]);
+      if(!rows.length)body.append(node('p','dim',history.hasMore?'No promotional texts or emails in this page. Load older messages below.':'No promotional texts or emails collected for this hall yet.'));
+      const list=node('ul','scout-msgs');for(const row of rows)list.append(messageItem(row));body.append(list);
+      if(history.hasMore)body.append(button('Load older texts and emails',()=>loadHistory(hall.id,true)));
+    }
   }
   function renderEvidence(hall) {
     body.append(node('p','dim',`${esc(hall.schedule?.details || '')} ${esc(hall.presales?.details || '')}`));
@@ -408,7 +423,7 @@ export function renderCompetition({ request = serverRequest, params = {}, onNavi
       if(!Array.isArray(next.halls))throw Error('Invalid collection');snapshot=next;histories.clear();
       status.textContent=`${halls().length} California qualifying bingo programs · SMS sync ${timeLabel(snapshot.lastSync)} · email sync ${timeLabel(snapshot.lastEmailSync)}`;
       retry.hidden=true;
-      draw();if(selected&&tab==='evidence')loadHistory(selected);
+      draw();if(selected&&['evidence','messages'].includes(tab))loadHistory(selected);
     } catch { if(generation===loadGeneration){status.textContent='Collection unavailable. Check the SAR server connection and retry. Previously loaded data, if shown, has not refreshed.';retry.hidden=false;} }
   }
   const retry=button('Retry connection',refresh);header.append(retry);

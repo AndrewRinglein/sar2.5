@@ -1,3 +1,5 @@
+import { play, isEnabled, setEnabled } from '../lib/sound.js';
+import { shuffleThen } from '../lib/leaderboard-motion.js';
 /* ============================================================================
    SAR 2.0 — U9, Leaderboard
 
@@ -62,6 +64,8 @@ export function aspectsFor(categories = []) {
       key: c.key,
       label: c.display_name,
       colour: c.color_bg_from || null,
+      textColour: c.color_text || null,
+      borderColour: c.color_border || null,
       get: (t) => t.categories.find((x) => x.key === c.key)?.revenue ?? null,
       fmt: usd,
       better: 1,
@@ -93,15 +97,17 @@ function card(aspect, value, active) {
   const c = h('button', `mcard${active ? ' is-active' : ''}`);
   c.type = 'button';
   c.dataset.aspect = aspect.key;
-  c.title = `Click to sort by ${aspect.label}`;
+  c.title = `${aspect.label}: ${aspect.fmt(value)} — click to sort`;
   // Per-tenant category colour, from the database. Runtime data, not design.
   if (aspect.colour) {
     if (active) {
       c.style.background = aspect.colour;
-      c.style.borderColor = aspect.colour;
+      c.style.borderColor = aspect.borderColour || aspect.colour;
+      c.style.color = aspect.textColour || 'var(--ink)';
+      c.dataset.category = 'true';
     } else {
-      c.style.borderColor = aspect.colour;
-      c.style.color = aspect.colour;
+      c.style.borderLeftColor = aspect.borderColour || aspect.colour;
+      c.style.color = 'var(--ink)';
     }
   }
   c.innerHTML = `<span class="mcard-label">${esc(aspect.label)}</span>
@@ -148,7 +154,7 @@ export function selectedSlots(param, slots) {
   return picked.size ? picked : new Set(known);
 }
 
-export function renderLeaderboard({ data, params, onNavigate, setInspectorContent }) {
+export function renderLeaderboard({ data, params, onNavigate: navigate, setInspectorContent }) {
   const aspects = aspectsFor(data.categories);
   const aspect = aspects.find((a) => a.key === params.aspect)
     ?? aspects.find((a) => a.key === DEFAULT_ASPECT);
@@ -156,7 +162,13 @@ export function renderLeaderboard({ data, params, onNavigate, setInspectorConten
   const hall = params.hall ?? 'all';
   const descending = params.dir ? params.dir === 'desc' : true;
 
-  const root = h('div', 'screen');
+  const root = h('div', 'screen leaderboard');
+  const shuffle = shuffleThen(root);
+  root.dispose = shuffle.dispose;
+  const onNavigate = (screen, next) => {
+    if (screen === 'leaderboard') { shuffle.run(() => navigate(screen, next)); }
+    else { play('event'); navigate(screen, next); }
+  };
 
   /* ---- filters: hall and period only. The metrics are in the rows. ---- */
   const bar = h('div', 'filter-bar');
@@ -186,6 +198,10 @@ export function renderLeaderboard({ data, params, onNavigate, setInspectorConten
     { ...params, hall, aspect: aspect.key, period: period.key,
       dir: descending ? 'asc' : 'desc' }));
   bar.append(dirBtn);
+  const sound = h('button', 'chip'); sound.type = 'button';
+  const soundLabel = () => { sound.textContent = isEnabled() ? 'Sound on' : 'Sound off'; sound.setAttribute('aria-pressed', String(isEnabled())); };
+  soundLabel(); sound.addEventListener('click', () => { setEnabled(!isEnabled()); soundLabel(); if (isEnabled()) play('click'); });
+  bar.append(sound);
   root.append(bar);
 
   /* ---- days: which weekday-and-type slots are in the pool ---- */
@@ -249,6 +265,7 @@ export function renderLeaderboard({ data, params, onNavigate, setInspectorConten
     const hallName = data.locations.find((l) => l.id === r.event.location_id)?.name ?? DASH;
     const row = h('div', `lb-row${i < 3 ? ` rank-${i + 1}` : ''}`);
 
+    row.style.setProperty('--row-delay', `${Math.min(i, 12) * 18}ms`);
     const rank = h('div', 'lb-rank', i < 3 ? ['①', '②', '③'][i] : String(i + 1));
 
     const name = h('button', 'lb-name');
@@ -262,7 +279,7 @@ export function renderLeaderboard({ data, params, onNavigate, setInspectorConten
     const cards = h('div', 'lb-cards');
     // Equal columns, set from the number of metrics, so every card in a
     // column is the same width down the whole board.
-    cards.style.gridTemplateColumns = `repeat(${aspects.length}, minmax(0, 1fr))`;
+    // Card minimum width keeps every number readable; the grid wraps as needed.
     for (const a of aspects) {
       const c = card(a, a.get(r.totals), a.key === aspect.key);
       c.addEventListener('click', (ev) => {
@@ -278,8 +295,10 @@ export function renderLeaderboard({ data, params, onNavigate, setInspectorConten
     // Escaped: these are free text a manager typed on the session.
     const notes = [r.event.notes, r.event.metadata?.promo_notes]
       .filter(Boolean).map(esc).join(' · ');
-    const note = h('div', 'lb-note', notes || '<span class="dim">—</span>');
-    if (notes) note.title = notes;
+    const note = h(notes ? 'details' : 'span', 'lb-note');
+    if (notes) {
+      note.innerHTML = '<summary aria-label="Expand session notes" title="Expand session notes">Notes</summary><div class="lb-note-body">' + notes + '</div>';
+    } else { note.textContent = '—'; note.title = 'No session notes'; }
 
     row.append(rank, name, cards, note);
     board.append(row);

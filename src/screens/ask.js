@@ -165,15 +165,16 @@ export function recentHistory(turns) {
 
 /** Conversation memory for follow-up questions. Lives for the browser session. */
 export const conversation = [];
+const knowledgeSelection = { general: true, forecasting: false };
 export function resetConversation() { conversation.length = 0; }
 
 /** The browser sends its SAR session, a question, the data and recent turns; never a provider key. */
-export async function askClaude({ question, context, history = [], request = serverRequest }) {
+export async function askClaude({ question, context, history = [], knowledge, request = serverRequest }) {
   if (!question?.trim()) return { ok: false, error: 'Ask something first.' };
   try {
-    return await request('/api/ask-sar', { body: { question: question.trim(), context, history } });
-  } catch {
-    return { ok: false, error: 'Ask SAR is temporarily unavailable. Please try again later.' };
+    return await request('/api/ask-sar', { body: { question: question.trim(), context, history, ...(knowledge ? { knowledge } : {}) } });
+  } catch (error) {
+    return { ok: false, error: error.status ? error.message : 'Ask SAR is temporarily unavailable. Please try again later.' };
   }
 }
 
@@ -307,6 +308,16 @@ export function renderAsk({ data, params, setInspectorContent }) {
   const panel = h('section', 'panel');
   panel.append(h('h3', 'panel-title', 'Ask SAR'));
   panel.append(h('p', 'muted', `Ask about any session, hall, weekday, month, product or jackpot. ${int(context.sessionCount)} sessions are loaded. Follow-up questions remember the conversation.`));
+  const selections = knowledgeSelection;
+  const choices = h('fieldset', 'filter-bar');
+  choices.append(h('legend', 'semi', 'Context for this conversation'));
+  for (const [key, title] of [['general', 'General bingo knowledge'], ['forecasting', 'Forecasting']]) {
+    const label = h('label'); const input = document.createElement('input');
+    input.type = 'checkbox'; input.checked = selections[key]; input.setAttribute('aria-label', title);
+    input.addEventListener('change', () => { selections[key] = input.checked; resetConversation(); redraw(); });
+    label.append(input, document.createTextNode(' ' + title)); choices.append(label);
+  }
+  panel.append(choices, h('p', 'dim', 'Only selected files are included. Changing context starts a new conversation.'));
   const ask = h('form', 'ask-form');
   ask.innerHTML = '<label class="sr-only" for="q">Your question</label>'
     + '<input id="q" type="text" maxlength="2000" placeholder="Ask about the halls…" aria-label="Your question about the halls">'
@@ -334,13 +345,13 @@ export function renderAsk({ data, params, setInspectorContent }) {
   const run = async question => {
     if (busy || !question.trim()) return;
     busy = true;
-    for (const b of panel.querySelectorAll('button')) b.disabled = true;
+    for (const b of panel.querySelectorAll('button, input[type=checkbox]')) b.disabled = true;
     const history = recentHistory(conversation);
     conversation.push({ role: 'user', content: question.trim() });
     redraw();
     const thinking = h('p', 'dim'); thinking.textContent = 'Thinking…'; out.append(thinking);
     try {
-      const result = await askClaude({ question, context, history });
+      const result = await askClaude({ question, context, history, knowledge: { ...selections } });
       if (result.ok) {
         const { answer, basis } = splitBasis(result.text);
         conversation.push({ role: 'assistant', content: result.text, shown: answer, basis });
@@ -353,7 +364,7 @@ export function renderAsk({ data, params, setInspectorContent }) {
       ask.querySelector('#q').value = '';
     } finally {
       busy = false;
-      for (const b of panel.querySelectorAll('button')) b.disabled = false;
+      for (const b of panel.querySelectorAll('button, input[type=checkbox]')) b.disabled = false;
     }
   };
   ask.addEventListener('submit', ev => {
@@ -375,7 +386,7 @@ export function renderAsk({ data, params, setInspectorContent }) {
   detail.append(h('p', 'muted', `Your question, the recent conversation and a data package are sent to the answer service: `
     + `${int(context.sessionCount)} session rows (${context.columns.length} columns each), monthly totals per hall, `
     + `weekday averages and jackpot state. No staff, runner or customer records are included. `
-    + `The bingo knowledge file (knowledge/bingo-knowledge.md) is added by the server.`));
+    + `The server adds only the selected General bingo knowledge and Forecasting context files.`));
   const pre = h('pre', 'ask-payload');
   pre.setAttribute('data-raw', 'json');
   const { sessions, ...summaries } = context;
@@ -387,6 +398,6 @@ export function renderAsk({ data, params, setInspectorContent }) {
     + '<p class="inspector-section-label">Scope</p>'
     + '<p class="muted">Every session with its revenue, payouts, net, attendance, product categories and jackpots; monthly totals per hall; weekday averages. Staff and wage details are not included.</p>'
     + '<p class="inspector-section-label">Knowledge</p>'
-    + '<p class="muted">Edit <code>knowledge/bingo-knowledge.md</code> in the app folder to teach Ask SAR about your halls. It is read on every question.</p>');
+    + '<p class="muted">Edit <code>knowledge/bingo-knowledge.md</code> and <code>knowledge/forecasting.md</code> in the app folder. Hosted changes take effect after publishing the updated server. Only selected context is sent.</p>');
   return root;
 }

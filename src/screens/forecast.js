@@ -14,7 +14,7 @@
      the Managers screen already proved. SAR 1.0's projection (SPEC §8.3) is
      not followed, per the plan; its guardrails are kept — no invented past
      sessions, a visible unprojectable bucket, the averages and counts shown.
-   · Drivers (attendance, spend per player, payout ratio, slots on/off) are
+   · Drivers (attendance, RPA, payout ratio, slots on/off) are
      multipliers on those slot baselines, not a second model.
    · Two modes: "Bingo only" stops at net; "With expenses" continues to
      profit using Unit Economics' assumptions (the same stored values — one
@@ -57,7 +57,7 @@ const MAX_SESSION_ROWS = 400;
 
 const DRIVERS = [
   { key: 'att', label: 'Attendance', unit: '%', note: 'players per session' },
-  { key: 'spend', label: 'Spend per player', unit: '%', note: 'gross per head' },
+  { key: 'spend', label: 'RPA', unit: '%', note: 'revenue per attendee' },
   { key: 'payout', label: 'Payout ratio', unit: 'pp', note: 'percentage points of gross' },
 ];
 
@@ -166,6 +166,7 @@ export function renderForecast({
   for (const n of headNotices({ base, roster, sched, lastData, todayDay, hallName })) {
     head.append(h('div', 'mg-notice', n));
   }
+  head.append(h('p', 'mg-notice', 'Full expense budget not connected. With expenses uses staffing and fixed-cost assumptions plus estimated goods costs; it is not a complete business-profit forecast.'));
   root.append(head);
 
   /* ---- drivers ---- */
@@ -823,7 +824,7 @@ function inspectorHtml(ctx) {
       its weekday. A day more than ${MISSING_GRACE_DAYS} day in the past with no data is missing, not
       projected. Yesterday and today are still projected, because data arrives a day late.</p>
     <p class="inspector-section-label">Drivers</p>
-    <p class="muted">Attendance and spend per player multiply each slot's gross; the payout shift moves
+    <p class="muted">Attendance and RPA multiply each slot's gross; the payout shift moves
       its payout ratio. Switching a slot off removes its nights. The baseline is always shown beside.</p>
     <p class="inspector-section-label">The range</p>
     <p class="muted">Two parts. Night-to-night: each slot's spread, combined in quadrature at

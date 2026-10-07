@@ -12,14 +12,14 @@ export {
 
 /** The owner-editable knowledge file, re-read when it changes on disk. */
 export const KNOWLEDGE_PATH = 'knowledge/bingo-knowledge.md';
-let knowledgeCache = { mtime: 0, text: '' };
+const knowledgeCache = new Map();
 export function loadKnowledge(path = KNOWLEDGE_PATH) {
   try {
     const mtime = statSync(path).mtimeMs;
-    if (mtime !== knowledgeCache.mtime) {
-      knowledgeCache = { mtime, text: readFileSync(path, 'utf8').slice(0, MAX_KNOWLEDGE_CHARS) };
+    if (mtime !== knowledgeCache.get(path)?.mtime) {
+      knowledgeCache.set(path, { mtime, text: readFileSync(path, 'utf8').slice(0, MAX_KNOWLEDGE_CHARS) });
     }
-    return knowledgeCache.text;
+    return knowledgeCache.get(path).text;
   } catch { return ''; }
 }
 
@@ -37,7 +37,7 @@ async function readBody(req, maxBytes) {
 export function createLocalApi({ pool = null, fetchImpl = fetch,
   loadOperations = readOperations, loadKey = readAnthropicKey, apiKey = null,
   authenticate = authorize, model = DEFAULT_MODEL, now = Date.now,
-  knowledge = loadKnowledge, ...extras } = {}) {
+  knowledge = () => ({ general: loadKnowledge(), forecasting: loadKnowledge('knowledge/forecasting.md') }), ...extras } = {}) {
   // Same-origin only (cors: null): the browser reaches this through Vite.
   const handle = createApiCore({ prefixes: ['/api'], cors: null, pool, fetchImpl,
     loadOperations, loadKey, apiKey, authenticate, model, now, knowledge, ...extras });

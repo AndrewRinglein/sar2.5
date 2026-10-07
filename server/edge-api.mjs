@@ -105,7 +105,7 @@ export function createEdgeServer({ env, pg, knowledge = '', ca = null, ...overri
   }
   const rawKey = env('SAR_ANTHROPIC_API_KEY') ?? '';
   const apiKey = /^sk-ant-/.test(rawKey) ? rawKey : null;
-  const text = String(knowledge ?? '').slice(0, MAX_KNOWLEDGE_CHARS);
+  const text = typeof knowledge === 'string' ? knowledge.slice(0, MAX_KNOWLEDGE_CHARS) : { general: String(knowledge?.general ?? '').slice(0, MAX_KNOWLEDGE_CHARS), forecasting: String(knowledge?.forecasting ?? '').slice(0, MAX_KNOWLEDGE_CHARS) };
   return createEdgeHandler({ pool, apiKey, model: env('SAR_ANTHROPIC_MODEL') || DEFAULT_MODEL,
     knowledge: () => text, sendLogin: createLoginSender({ pool, serviceKey: env('SUPABASE_SERVICE_ROLE_KEY'), mailKey: env('RESEND_API_KEY') }), ...overrides });
 }

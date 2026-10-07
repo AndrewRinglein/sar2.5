@@ -56,19 +56,19 @@ const { NAV } = await import('../src/lib/router.js');
 /* ---- representative data, shaped exactly like production ---------------- */
 const CATEGORIES = [
   { key: 'flash', display_name: 'Flash', show_rpa: true, show_margin: true,
-    color_bg_from: '#b06a09',
+    color_bg_from: '#fef3c7', color_text: '#92400e', color_border: '#fbbf24',
     revenue_keys: ['flash'], payout_keys: ['flash_payout', 'special_game_5'] },
   { key: 'strip', display_name: 'Strip', show_rpa: true, show_margin: true,
-    color_bg_from: '#a3306e',
+    color_bg_from: '#fce7f3', color_text: '#831843', color_border: '#f472b6',
     revenue_keys: ['strips'], payout_keys: ['strips_payout', 'gremlin_hotball'] },
   { key: 'paper', display_name: 'Paper', show_rpa: false, show_margin: true,
-    color_bg_from: '#2f5fd0',
+    color_bg_from: '#e0e7ff', color_text: '#312e81', color_border: '#818cf8',
     revenue_keys: ['paper'], payout_keys: ['paper_payout', 'payout_rwb'] },
   { key: 'cherries', display_name: 'Cherries', show_rpa: true, show_margin: true,
-    color_bg_from: '#0e7a6e',
+    color_bg_from: '#dc2626', color_text: '#ffffff', color_border: '#dc2626',
     revenue_keys: ['cherries'], payout_keys: ['special_game_1'] },
   { key: 'other', display_name: 'Other', show_rpa: false, show_margin: false,
-    color_bg_from: '#5b4bbd',
+    color_bg_from: '#6b7280', color_text: '#ffffff', color_border: '#6b7280',
     revenue_keys: ['merch'], payout_keys: ['refund_other'] },
 ];
 

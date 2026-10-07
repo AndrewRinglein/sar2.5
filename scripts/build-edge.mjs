@@ -21,6 +21,7 @@ import { dirname, join } from 'node:path';
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 export const EDGE_ENTRY = join(ROOT, 'server', 'edge-entry.mjs');
 export const EDGE_OUTPUT = join(ROOT, 'supabase', 'functions', 'sar2-api', 'index.ts');
+export const FORECAST_KNOWLEDGE_FILE = join(ROOT, 'knowledge', 'forecasting.md');
 export const KNOWLEDGE_FILE = join(ROOT, 'knowledge', 'bingo-knowledge.md');
 
 const BANNER = [
@@ -40,7 +41,7 @@ export async function buildEdgeBundle() {
     setup(b) {
       b.onResolve({ filter: /^sar2:knowledge$/ }, () => ({ path: 'knowledge', namespace: 'sar2' }));
       b.onLoad({ filter: /.*/, namespace: 'sar2' }, () => ({
-        contents: `export default ${JSON.stringify(lf(readFileSync(KNOWLEDGE_FILE, 'utf8')))};`,
+        contents: `export default ${JSON.stringify({ general: lf(readFileSync(KNOWLEDGE_FILE, 'utf8')), forecasting: lf(readFileSync(FORECAST_KNOWLEDGE_FILE, 'utf8')) })};`,
         loader: 'js',
       }));
     },

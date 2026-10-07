@@ -424,7 +424,7 @@ input:hover { border-color: var(--ink-4); }
 
 .lb-row {
   display: grid;
-  grid-template-columns: 26px 190px minmax(0, 1fr) 150px;
+  grid-template-columns: 26px 160px minmax(0, 1fr) 3rem;
   align-items: center;
   gap: var(--s-2);
   padding: var(--s-2) var(--s-3);
@@ -458,7 +458,8 @@ input:hover { border-color: var(--ink-4); }
    and squeezes the others until their text escapes. minmax(0,1fr) is what
    actually lets text-overflow work — without the 0 minimum a grid child
    refuses to shrink below its content and the ellipsis never applies. */
-.lb-cards { display: grid; gap: 2px; min-width: 0; }
+.leaderboard { container-type: inline-size; }
+.lb-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 7rem), 1fr)); gap: var(--s-1); min-width: 0; }
 
 .mcard {
   min-width: 0; overflow: hidden;
@@ -508,19 +509,18 @@ input:hover { border-color: var(--ink-4); }
   color: var(--ink-4);
 }
 .mcard.is-active .mcard-label { color: var(--surface); opacity: 0.9; }
-.mcard-value { font-size: var(--t-sm); font-weight: 500; }
+.mcard-value { font-size: var(--t-sm); font-weight: 500; overflow: visible; text-overflow: clip; }
+.mcard[data-category="true"] .mcard-label { color: inherit; }
 
-.lb-note {
-  font-size: var(--t-xs); color: var(--ink-3);
-  padding: 2px var(--s-2);
-  background: var(--surface-2); border: 1px solid var(--hair-2);
-  border-radius: var(--r-xs);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-
-@media (max-width: 1500px) {
-  .lb-row { grid-template-columns: 24px 160px minmax(0, 1fr); }
-  .lb-note { display: none; }
+.lb-note { font-size:var(--t-xs); color:var(--ink-3); min-width:0; }
+.lb-note summary { cursor:pointer; text-decoration:underline; }
+.lb-note[open] { grid-column:2 / -1; padding:var(--s-2); background:var(--surface-2); }
+.lb-note-body { white-space:pre-wrap; overflow-wrap:anywhere; margin-top:var(--s-2); }
+@container (max-width: 70rem) {
+  .lb-row { grid-template-columns:26px minmax(0,1fr) 3rem; }
+  .lb-cards { grid-column:1 / -1; grid-row:2; }
+  .lb-note { grid-column:3; grid-row:1; }
+  .lb-note[open] { grid-column:1 / -1; grid-row:3; }
 }
 
 button.link {
@@ -1442,3 +1442,6 @@ span.so-db-act { background: var(--series-1); }
   .crew-src { margin-left: 0; white-space: normal; }
 }
 /* ---- end crew from the data validator ---- */
+.leaderboard .lb-row { animation: lb-settle 280ms ease-out both; animation-delay: var(--row-delay, 0ms); }
+@keyframes lb-settle { from { opacity:.6; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .leaderboard .lb-row { animation:none; } }

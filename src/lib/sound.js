@@ -1,3 +1,4 @@
+import { legacySounds } from './sar1-sounds.js';
 /* ============================================================================
    SAR 2.0 — sound
 
@@ -65,6 +66,13 @@ export function play(name = 'select') {
     ctx = ctx ?? new AC();
     if (ctx.state === 'suspended') ctx.resume();
 
+    const legacyName = ({ select: 'click', tick: 'click', expand: 'navigate', collapse: 'navigate', scroll: 'event' })[name] || name;
+    if (['welcome','click','navigate','refresh','success','event','shuffle'].includes(legacyName)) {
+      legacySounds.audioContext = ctx;
+      legacySounds.schedule = (fn, delay) => setTimeout(() => { if (isEnabled()) { try { fn(); } catch { /* optional audio */ } } }, delay);
+      legacySounds.play(legacyName);
+      return;
+    }
     const now = ctx.currentTime;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
