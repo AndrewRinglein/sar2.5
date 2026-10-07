@@ -1445,3 +1445,9 @@ span.so-db-act { background: var(--series-1); }
 .leaderboard .lb-row { animation: lb-settle 280ms ease-out both; animation-delay: var(--row-delay, 0ms); }
 @keyframes lb-settle { from { opacity:.6; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
 @media (prefers-reduced-motion: reduce) { .leaderboard .lb-row { animation:none; } }
+.fc-plan-inputs input { width:8rem; min-width:7rem; }
+.fc-plan-inputs input[data-explicit="true"] { border-color:var(--accent); color:var(--ink); }
+.fc-plan-add { margin-top:var(--s-4); }
+.fc-plan-add form { align-items:end; padding-top:var(--s-3); }
+.fc-plan-add label { display:grid; gap:var(--s-1); }
+.fc-plan-add input { width:10rem; }

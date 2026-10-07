@@ -1,3 +1,4 @@
+import { renderForecastPlan } from '../components/forecast-plan.js';
 /* ============================================================================
    SAR 2.0 — Forecast (U12)
 
@@ -58,7 +59,7 @@ const MAX_SESSION_ROWS = 400;
 const DRIVERS = [
   { key: 'att', label: 'Attendance', unit: '%', note: 'players per session' },
   { key: 'spend', label: 'RPA', unit: '%', note: 'revenue per attendee' },
-  { key: 'payout', label: 'Payout ratio', unit: 'pp', note: 'percentage points of gross' },
+  { key: 'payout', label: 'Margin', unit: 'pp', note: 'percentage points after prizes' },
 ];
 
 const signed = (v, unit) => `${v > 0 ? '+' : ''}${v}${unit === 'pp' ? ' pp' : '%'}`;
@@ -115,6 +116,7 @@ export function renderForecast({
   root.append(bar);
 
   const today = todayIso(now, data.config?.timezone ?? null);
+  root.prepend(renderForecastPlan({data,today,store}));
   const todayDay = dayNumber(today);
   const rows = sessionRows(data.events ?? [], data).filter((r) => r.day <= todayDay);
 
@@ -282,6 +284,10 @@ export function renderForecast({
   }
 
   draw();
+  const detail = h('details', 'panel');
+  detail.append(h('summary', 'panel-title', 'Session-based forecast and backtest'));
+  for (const child of [...root.children].slice(1)) detail.append(child);
+  root.append(detail);
   setInspectorContent?.(inspectorHtml({ prep, bt, months, hz, cogs }));
   return root;
 }
@@ -351,8 +357,8 @@ function driverSummary(d, off, open) {
   const n = normaliseDrivers(d);
   const parts = [];
   if (n.att) parts.push(`attendance ${signed(n.att, '%')}`);
-  if (n.spend) parts.push(`spend ${signed(n.spend, '%')}`);
-  if (n.payout) parts.push(`payout ${signed(n.payout, 'pp')}`);
+  if (n.spend) parts.push(`RPA ${signed(n.spend, '%')}`);
+  if (n.payout) parts.push(`margin ${signed(-n.payout, 'pp')}`);
   if (off?.size) parts.push(`${off.size} slot${off.size === 1 ? '' : 's'} off`);
   if (open?.size) parts.push(`${open.size} holiday night${open.size === 1 ? '' : 's'} re-opened`);
   return parts.length ? parts.join(' · ') : 'none';
@@ -361,21 +367,19 @@ function driverSummary(d, off, open) {
 function driversPanel({ state, onLive, onCommit, go }) {
   const panel = h('section', 'panel fc-drivers');
   panel.append(h('h3', 'panel-title', 'Drivers'));
-  panel.append(h('p', 'muted so-small', `Multipliers on every slot's baseline. Attendance and spend
-    per player scale gross; the payout shift moves each slot's payout ratio by percentage points
-    (kept between 0 and 100%). Drag to see the effect; release to keep it in the link.`));
+  panel.append(h('p', 'muted so-small', `Changes to every slot's baseline. Attendance and RPA scale revenue; Margin changes net after prizes as a percentage of revenue. Positive margin changes increase net. Drag to see the effect; release to keep it in the link.`));
   const labels = new Map();
   for (const d of DRIVERS) {
     const lim = DRIVER_LIMITS[d.key];
     const row = h('label', 'fc-drv');
     row.innerHTML = `<span class="fc-drv-l">${esc(d.label)}<small>${esc(d.note)}</small></span>
       <input type="range" min="${lim.min}" max="${lim.max}" step="${lim.step}"
-        value="${esc(state.drivers[d.key])}" data-key="${esc(d.key)}" aria-label="${esc(d.label)} change">
+        value="${esc(d.key === 'payout' ? -state.drivers[d.key] : state.drivers[d.key])}" data-key="${esc(d.key)}" aria-label="${esc(d.label)} change">
       <span class="fc-drv-v"></span>`;
     const input = row.querySelector('input');
     labels.set(d.key, row.querySelector('.fc-drv-v'));
     input.addEventListener('input', () => {
-      state.drivers = normaliseDrivers({ ...state.drivers, [d.key]: Number(input.value) });
+      state.drivers = normaliseDrivers({ ...state.drivers, [d.key]: Number(input.value) * (d.key === 'payout' ? -1 : 1) });
       onLive();
     });
     input.addEventListener('change', () => onCommit());
@@ -394,7 +398,7 @@ function driversPanel({ state, onLive, onCommit, go }) {
     panel,
     refresh() {
       for (const d of DRIVERS) {
-        const v = state.drivers[d.key];
+        const v = state.drivers[d.key] * (d.key === 'payout' ? -1 : 1);
         labels.get(d.key).textContent = v ? signed(v, d.unit) : 'baseline';
       }
     },
@@ -824,8 +828,7 @@ function inspectorHtml(ctx) {
       its weekday. A day more than ${MISSING_GRACE_DAYS} day in the past with no data is missing, not
       projected. Yesterday and today are still projected, because data arrives a day late.</p>
     <p class="inspector-section-label">Drivers</p>
-    <p class="muted">Attendance and RPA multiply each slot's gross; the payout shift moves
-      its payout ratio. Switching a slot off removes its nights. The baseline is always shown beside.</p>
+    <p class="muted">Attendance and RPA multiply each slot's gross; Margin changes net after prizes. Switching a slot off removes its nights. The baseline is always shown beside.</p>
     <p class="inspector-section-label">The range</p>
     <p class="muted">Two parts. Night-to-night: each slot's spread, combined in quadrature at
       ${Z_95} standard deviations. Level drift: ${bt.drift

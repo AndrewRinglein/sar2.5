@@ -6,9 +6,15 @@ Editable owner context. Include this file only when the Forecasting toggle is on
 
 A full forecast includes session revenue, prizes, staffing/payroll, goods, and other operating expenses. Revenue minus prizes is net gaming revenue, not final profit. Do not describe a session-revenue projection as the full business forecast.
 
-The current SAR forecast's expense mode has only Unit Economics assumptions (staff hours and blended hourly cost, fixed cost per session) plus estimated linked goods costs. Those are not recovered accountant figures. Historical monthly expense information was found in the older SAR accountant implementation: payroll by SC/RWC and shared other expenses allocated by hall revenue share, with commission separated from payroll for reporting, not subtracted twice. The source database was paused when investigated. Amounts have not been recovered or verified; never substitute zeros or invented estimates for them.
+The session-based forecast's expense mode has only Unit Economics assumptions (staff hours and blended hourly cost, fixed cost per session) plus estimated linked goods costs. Those are not recovered accountant figures. Historical monthly expense information was found in the older SAR accountant implementation: payroll by SC/RWC and shared other expenses allocated by hall revenue share, with commission separated from payroll for reporting, not subtracted twice. The source database was paused when investigated. Amounts have not been recovered or verified; never substitute zeros or invented estimates for them.
 
 Keep recorded expenses, approved budgets, and scenario assumptions separate. Monthly fixed costs should not automatically disappear when a night is cancelled. Avoid counting goods costs twice if already included in a shared expense total. Show the period, hall allocation, missing categories and whether each figure is actual or assumed. Forecasting knowledge does not itself add expense records to the numeric data payload.
+
+## Editable 12-month plans
+
+The primary Forecast planner covers the next 12 full calendar months and supports named browser-local saves and Excel downloads with formulas. Existing halls start from a frozen snapshot of the 13-week slot model, with schedule and closure information. New halls have an explicit opening month and user-entered sessions per month, attendance per session, RPA, and margin. No historical data is invented for them.
+
+Attendance, RPA, and Margin are the three key drivers. Margin means revenue less prizes, divided by revenue; operating expenses are separate. A change entered in a month carries forward for that metric until a later explicit override. Changes do not compound. Clearing an override restores its inherited value. Each hall can have an explicit monthly operating expense budget; blank budgets leave profit unknown. These budgets are assumptions, not recovered accountant figures. The Ask SAR data payload does not currently include the user's locally saved forecast; ask for those assumptions before referring to a particular plan.
 
 ## Attendance and RPA are distinct drivers
 

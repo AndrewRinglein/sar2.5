@@ -3,7 +3,7 @@
   "version": "2.0.0",
   "private": true,
   "type": "module",
-  "description": "SAR \u2014 Session Analysis Reporting. Read-only analytics for Vanguard Music & Performing Arts.",
+  "description": "SAR — Session Analysis Reporting. Read-only analytics for Vanguard Music & Performing Arts.",
   "scripts": {
     "dev": "vite",
     "build": "npm run lint:tokens && npm test && npm run test:future && vite build",
@@ -24,10 +24,16 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",
+    "exceljs": "^4.4.0",
     "leaflet": "1.9.4",
     "pg": "^8.23.0"
   },
   "engines": {
     "node": ">=22"
+  },
+  "overrides": {
+    "exceljs": {
+      "uuid": "11.1.1"
+    }
   }
 }
