@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import ExcelJS from 'exceljs';
 import {JSDOM} from 'jsdom';
-import {projectPlan,setPlanValue,readPlans,writePlans,PLAN_STORAGE,seedPlan} from '../src/lib/forecast-plan.js';
+import {projectPlan,setPlanValue,readPlans,writePlans,PLAN_STORAGE,seedPlan,savePlan,writeDraft} from '../src/lib/forecast-plan.js';
 import {forecastWorkbook} from '../src/lib/forecast-excel.js';
 import {renderForecastPlan} from '../src/components/forecast-plan.js';
 import {makeData} from './fixtures/screen-data.mjs';
@@ -26,7 +26,7 @@ test('named snapshot round trips without subsequent draft mutations and blocked 
 test('Excel round trip preserves formulas, cached totals, carry-forward references and missing expenses',async()=>{
   const p=fixture();setPlanValue(p,'h1','2026-12','attendance',150);setPlanValue(p,'h1','2027-02','attendance',180);p.halls[0].base.expenses=null;
   const book=await forecastWorkbook(p);const loaded=new ExcelJS.Workbook();await loaded.xlsx.load(await book.xlsx.writeBuffer());
-  const h=loaded.getWorksheet('Hall 1');assert.equal(h.getCell('G5').result,240000);assert.equal(h.getCell('I5').result,72000);assert.equal(h.getCell('C7').formula,'C6');assert.equal(h.getCell('C8').value,180);assert.equal(h.getCell('J5').value,null);assert.match(h.getCell('K5').formula,/COUNT/);assert.equal(loaded.getWorksheet('All halls').getCell('D2').result,240000);assert.equal(loaded.getWorksheet('Changes').rowCount,3);
+  const h=loaded.getWorksheet('Hall 1');assert.equal(h.getCell('G5').result,240000);assert.equal(h.getCell('I5').result,72000);assert.equal(h.getCell('C7').formula,'IF(ISNUMBER(C6),C6,"")');assert.equal(h.getCell('C8').value,180);assert.equal(h.getCell('J5').value,null);assert.match(h.getCell('K5').formula,/COUNT/);assert.equal(loaded.getWorksheet('All halls').getCell('D2').result,240000);assert.equal(loaded.getWorksheet('Changes').rowCount,3);
 });
 test('UI adds a planned hall, saves and reloads it with independently carried changes',()=>{
   const dom=new JSDOM('<body></body>',{url:'https://sar.test'});globalThis.document=dom.window.document;globalThis.window=dom.window;
@@ -41,4 +41,50 @@ test('UI adds a planned hall, saves and reloads it with independently carried ch
 });
 test('seeding converts cents once and freezes the historical monthly model',()=>{
   const data=makeData();data.locations=data.locations.filter(l=>l.id==='LS');data.events.forEach((e,i)=>{e.location_id='LS';e.event_type='regular';e.event_date=new Date(Date.UTC(2026,7,13)-i*7*86400000).toISOString().slice(0,10);});const p=seedPlan(data,'2026-08-14');assert.equal(p.start,'2026-09');assert.ok(p.halls.length>0);const projected=projectPlan(p);const h=projected.halls[0];assert.ok(h.rows[0].rpa>0&&h.rows[0].rpa<2000);assert.equal(h.rows[0].expenses,null);
+});
+
+test('pre-opening expenses carry forward and remain in Excel profit',async()=>{
+  const p=fixture();p.halls[0].opening='2027-01';
+  assert.equal(projectPlan(p).months[0].expenses,0);
+  setPlanValue(p,'h1','2026-11','expenses',10000);
+  const rows=projectPlan(p).months;
+  assert.deepEqual(rows.slice(0,3).map(r=>r.expenses),[10000,10000,10000]);
+  assert.deepEqual(rows.slice(0,2).map(r=>r.profit),[-10000,-10000]);
+  const book=await forecastWorkbook(p),sheet=book.getWorksheet('Hall 1');
+  assert.equal(sheet.getCell('J5').value,10000);assert.equal(sheet.getCell('K5').result,-10000);
+  assert.match(sheet.getCell('J7').formula,/J6/);
+});
+test('missing margin keeps attendance and revenue known but prizes and net unknown',async()=>{
+  const p=fixture();p.halls[0].base.margin=null;
+  const r=projectPlan(p).months[0];assert.equal(r.visits,1200);assert.equal(r.gross,240000);
+  assert.equal(r.net,null);assert.equal(r.payout,null);assert.equal(r.profit,null);
+  const book=await forecastWorkbook(p);assert.equal(book.getWorksheet('Hall 1').getCell('G5').result,r.gross);
+  p.halls[0].base.sessions=0;p.halls[0].base.attendance=null;p.halls[0].base.rpa=null;
+  assert.equal(projectPlan(p).months[0].net,0);
+});
+test('sparse history preserves scheduled sessions when manual metrics are supplied',()=>{
+  const p=seedPlan(makeData(),'2026-08-14');const h=p.halls[0];
+  assert.equal(h.baselines['2026-09'].sessions,12);
+  for(const [key,value] of Object.entries({attendance:100,rpa:200,margin:30}))setPlanValue(p,h.id,p.start,key,value);
+  assert.equal(projectPlan(p).halls[0].rows[0].gross,240000);
+});
+test('two mounted planners preserve both named saves through stale draft edits',()=>{
+  const dom=new JSDOM('<body></body>',{url:'https://sar.test'});globalThis.document=dom.window.document;globalThis.window=dom.window;
+  const store=window.localStorage,data=makeData();const a=renderForecastPlan({data,today:'2026-08-14',store}),b=renderForecastPlan({data,today:'2026-08-14',store});
+  for(const [root,name] of [[a,'First tab'],[b,'Second tab']]){
+    root.querySelector('[aria-label="12-month forecast name"]').value=name;
+    [...root.querySelectorAll('button')].find(b=>b.textContent==='Save forecast').click();
+  }
+  const input=a.querySelector('[aria-label="12-month forecast name"]');input.value='Unsaved edit';input.dispatchEvent(new window.Event('change'));
+  assert.deepEqual(readPlans(store).saved.map(p=>p.name).sort(),['First tab','Second tab']);dom.window.close();
+});
+
+test('stale edits of one named snapshot save a copy and retain the newer snapshot',()=>{
+  const dom=new JSDOM('',{url:'https://sar.test'}),store=dom.window.localStorage;
+  const original={...fixture(),id:'shared'};writePlans(store,{saved:[original],draft:original});
+  const a=structuredClone(original),b=structuredClone(original);
+  a.name='Newer';assert.ok(savePlan(store,a));
+  b.name='Stale editor';assert.ok(savePlan(store,b));assert.notEqual(a.id,b.id);
+  writeDraft(store,b);assert.deepEqual(readPlans(store).saved.map(p=>p.name).sort(),['Newer','Stale editor']);
+  dom.window.close();
 });

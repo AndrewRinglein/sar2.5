@@ -23,15 +23,14 @@ export async function forecastWorkbook(plan) {
       const n=i+5;sheet.addRow([row.month,row.sessions,row.attendance,row.rpa,Number.isFinite(row.margin)?row.margin/100:null,null,null,null,null,row.expenses,null]);
       const formula=(col,formula,value)=>{sheet.getCell(`${col}${n}`).value={formula,result:value??''};};
       for(const [key,col]of [['sessions','B'],['attendance','C'],['rpa','D'],['margin','E'],['expenses','J']]){
-        if(row.active && i>0 && hall.rows[i-1].active && row.origins[key] && row.origins[key]!==row.month){formula(col,`${col}${n-1}`,key==='margin'?row[key]/100:row[key]);}
+        if(i>0 && (key==='expenses' || (row.active && hall.rows[i-1].active)) && row.origins[key] && row.origins[key]!==row.month){formula(col,`IF(ISNUMBER(${col}${n-1}),${col}${n-1},"")`,key==='margin'?row[key]/100:row[key]);}
         else sheet.getCell(`${col}${n}`).font={color:{argb:'FF1756B3'}};
       }
-      formula('F',`IF(COUNT(B${n}:C${n})=2,B${n}*C${n},"")`,row.visits);
-      formula('G',`IF(COUNT(D${n},F${n})=2,D${n}*F${n},"")`,row.gross);
-      formula('I',`IF(COUNT(E${n},G${n})=2,E${n}*G${n},"")`,row.net);
+      formula('F',`IF(AND(ISNUMBER(B${n}),B${n}=0),0,IF(COUNT(B${n}:C${n})=2,B${n}*C${n},""))`,row.visits);
+      formula('G',`IF(AND(ISNUMBER(F${n}),F${n}=0),0,IF(COUNT(D${n},F${n})=2,D${n}*F${n},""))`,row.gross);
+      formula('I',`IF(AND(ISNUMBER(G${n}),G${n}=0),0,IF(COUNT(E${n},G${n})=2,E${n}*G${n},""))`,row.net);
       formula('H',`IF(COUNT(G${n},I${n})=2,G${n}-I${n},"")`,row.payout);
       formula('K',`IF(COUNT(I${n},J${n})=2,I${n}-J${n},"")`,row.profit);
-      if(!row.active)for(const col of ['F','G','H','I','J','K'])sheet.getCell(`${col}${n}`).value=0;
       for(const [key,col]of [['sessions','B'],['attendance','C'],['rpa','D'],['margin','E'],['expenses','J']]){const f=PLAN_FIELDS[key];sheet.getCell(`${col}${n}`).dataValidation={type:key==='sessions'?'whole':'decimal',operator:'between',allowBlank:true,formulae:[key==='margin'?f.min/100:f.min,key==='margin'?f.max/100:f.max],showErrorMessage:true,error:'Enter a valid nonnegative assumption; margin must be between -100% and 100%.'};}
     }
     sheet.getColumn(1).width=15;for(let c=2;c<=11;c++)sheet.getColumn(c).width=22;

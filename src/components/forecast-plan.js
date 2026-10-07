@@ -1,4 +1,4 @@
-import { PLAN_FIELDS, planMonths, seedPlan, projectPlan, setPlanValue, validPlanValue, readPlans, writePlans } from '../lib/forecast-plan.js';
+import { PLAN_FIELDS, planMonths, seedPlan, projectPlan, setPlanValue, validPlanValue, readPlans, writeDraft, savePlan } from '../lib/forecast-plan.js';
 import { monthFull } from '../lib/charts.js';
 import { esc } from '../lib/fmt.js';
 import { play } from '../lib/sound.js';
@@ -10,20 +10,21 @@ const copy=value=>JSON.parse(JSON.stringify(value));
 export function renderForecastPlan({data,today,store}) {
   const root=el('section','panel fc-plan');
   const memory=readPlans(store); let plan=memory.draft||seedPlan(data,today), hallId=plan.halls[0]?.id||'', notice='';
-  const persist=()=>{memory.draft=copy(plan);if(!writePlans(store,memory))notice='Browser storage is unavailable. Download Excel to keep this forecast.';};
+  const persist=()=>{memory.draft=copy(plan);if(!writeDraft(store,plan))notice='Browser storage is unavailable. Download Excel to keep this forecast.';};
   const button=(label,fn)=>{const b=el('button','chip',label);b.type='button';b.onclick=fn;return b;};
   function draw(){
+    memory.saved=readPlans(store).saved;
     root.replaceChildren(el('h3','panel-title','12-month forecast'));
     root.append(el('p','muted','Attendance × RPA = revenue. Revenue × Margin = net after prizes. Operating expenses are subtracted separately to calculate profit. Pick a month and edit any input; it carries forward until a later explicit change. Clear an input to restore its inherited value.'));
     const saving=el('div','filter-bar');const name=el('input');name.type='text';name.maxLength=80;name.value=plan.name;name.placeholder='Forecast name';name.setAttribute('aria-label','12-month forecast name');name.onchange=()=>{plan.name=name.value.trim();persist();};
     saving.append(name,button('Save forecast',()=>{plan.name=name.value.trim();if(!plan.name){notice='Give this forecast a name first.';draw();return;}
       plan.id ||= globalThis.crypto?.randomUUID?.()||`plan-${Date.now()}`;
-      plan.savedAt=new Date().toISOString();const at=memory.saved.findIndex(p=>p.id===plan.id);
-      if(at<0)memory.saved.push(copy(plan));else memory.saved[at]=copy(plan);notice=`Saved “${plan.name}” in this browser.`;persist();play('success');draw();
-    }),button('Save as copy',()=>{plan.name=name.value.trim();if(!plan.name){notice='Give the copy a name first.';draw();return;}plan.id=globalThis.crypto?.randomUUID?.()||`plan-${Date.now()}`;plan.savedAt=new Date().toISOString();memory.saved.push(copy(plan));notice=`Saved copy “${plan.name}”.`;persist();draw();}),button('New forecast',()=>{plan=seedPlan(data,today);hallId=plan.halls[0]?.id||'';notice='New forecast seeded from current data. Saved forecasts are unchanged.';persist();draw();}));
+      plan.savedAt=new Date().toISOString();notice=savePlan(store,plan)?`Saved “${plan.name}” in this browser.`:'Browser storage is unavailable. Download Excel to keep this forecast.';persist();play('success');draw();
+    }),button('Save as copy',()=>{plan.name=name.value.trim();if(!plan.name){notice='Give the copy a name first.';draw();return;}plan.id=globalThis.crypto.randomUUID();plan.savedAt=new Date().toISOString();notice=savePlan(store,plan)?`Saved copy “${plan.name}”.`:'Browser storage is unavailable. Download Excel to keep this forecast.';persist();draw();}),button('New forecast',()=>{plan=seedPlan(data,today);hallId=plan.halls[0]?.id||'';notice='New forecast seeded from current data. Saved forecasts are unchanged.';persist();draw();}));
     const exportButton=button('Download Excel',async()=>{exportButton.disabled=true;exportButton.textContent='Preparing Excel…';try{plan.name=name.value.trim();persist();const {downloadForecastPlan}=await import('../lib/forecast-excel.js');await downloadForecastPlan(plan);notice='Excel downloaded, including inputs, carried-forward changes and formulas.';}catch{notice='Excel could not be downloaded. Try again.';}draw();});saving.append(exportButton);
     if(memory.saved.length){const select=el('select');select.setAttribute('aria-label','Saved 12-month forecasts');select.append(option('Load a saved forecast…',''));for(const s of memory.saved)select.append(option(s.name,s.id));select.onchange=()=>{const saved=memory.saved.find(s=>s.id===select.value);if(saved){plan=copy(saved);hallId=plan.halls[0]?.id||'';notice=`Loaded “${plan.name}”.`;persist();draw();}};saving.append(select);}
     root.append(saving,el('p','dim',`${monthFull(plan.start)} through ${monthFull(planMonths(plan.start).at(-1))} · 12 full months · draft and named forecasts saved in this browser only.`));
+    if(!plan.baselineVersion && plan.halls.some(h=>h.baselines)) root.append(el('p','mg-notice','This forecast uses an older saved baseline that may omit sessions with sparse history. Review Sessions / month, or choose New forecast to use the corrected schedule. Your saved assumptions have been preserved.'));
     if(notice){const status=el('p','mg-notice',notice);status.setAttribute('role','status');root.append(status);}
     const projected=projectPlan(plan);const summary=el('table','rn-table');summary.innerHTML='<thead><tr><th class="name">Month · all halls</th><th>Attendance</th><th>Revenue</th><th>Net after prizes</th><th>Operating expenses</th><th>Profit</th></tr></thead>';
     const tbody=el('tbody');for(const m of projected.months){const tr=el('tr');for(const [i,value] of [monthFull(m.month),m.visits===null?'Not set':Math.round(m.visits).toLocaleString(),dollars(m.gross),dollars(m.net),dollars(m.expenses),dollars(m.profit)].entries())tr.append(el('td',i===0?'name':'',value));tbody.append(tr);}const annual={};for(const key of ['visits','gross','net','expenses','profit'])annual[key]=projected.months.some(m=>m[key]===null)?null:projected.months.reduce((sum,m)=>sum+m[key],0);

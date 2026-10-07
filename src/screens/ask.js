@@ -166,7 +166,8 @@ export function recentHistory(turns) {
 /** Conversation memory for follow-up questions. Lives for the browser session. */
 export const conversation = [];
 const knowledgeSelection = { general: true, forecasting: false };
-export function resetConversation() { conversation.length = 0; }
+let conversationGeneration = 0;
+export function resetConversation() { conversationGeneration++; conversation.length = 0; }
 
 /** The browser sends its SAR session, a question, the data and recent turns; never a provider key. */
 export async function askClaude({ question, context, history = [], knowledge, request = serverRequest }) {
@@ -300,7 +301,7 @@ export const SUGGESTIONS = Object.freeze([
    Screen
 --------------------------------------------------------------------------- */
 
-export function renderAsk({ data, params, setInspectorContent }) {
+export function renderAsk({ data, params, setInspectorContent, request = serverRequest }) {
   // Remove a credential saved by the old browser-key interface, if present.
   try { globalThis.localStorage?.removeItem('sar2-anthropic-key'); } catch { /* storage unavailable */ }
   const root = h('div', 'screen');
@@ -341,17 +342,28 @@ export function renderAsk({ data, params, setInspectorContent }) {
     for (const t of conversation) out.append(turn(t.role, t.shown ?? t.content, t.basis, t.note));
   };
   redraw();
-  let busy = false;
+  let busy = false, disposed = false, pendingTurn = null;
+  root.dispose = () => {
+    disposed = true;
+    if(pendingTurn) {
+      const index=conversation.indexOf(pendingTurn);
+      if(index>=0) conversation.splice(index,1);
+    }
+  };
   const run = async question => {
-    if (busy || !question.trim()) return;
+    if (disposed || busy || !question.trim()) return;
     busy = true;
     for (const b of panel.querySelectorAll('button, input[type=checkbox]')) b.disabled = true;
     const history = recentHistory(conversation);
-    conversation.push({ role: 'user', content: question.trim() });
+    const generation = conversationGeneration;
+    pendingTurn = { role: 'user', content: question.trim() };
+    conversation.push(pendingTurn);
     redraw();
     const thinking = h('p', 'dim'); thinking.textContent = 'Thinking…'; out.append(thinking);
     try {
-      const result = await askClaude({ question, context, history, knowledge: { ...selections } });
+      const result = await askClaude({ question, context, history, knowledge: { ...selections }, request });
+      if(disposed || generation !== conversationGeneration) return;
+      pendingTurn = null;
       if (result.ok) {
         const { answer, basis } = splitBasis(result.text);
         conversation.push({ role: 'assistant', content: result.text, shown: answer, basis });
@@ -364,7 +376,7 @@ export function renderAsk({ data, params, setInspectorContent }) {
       ask.querySelector('#q').value = '';
     } finally {
       busy = false;
-      for (const b of panel.querySelectorAll('button, input[type=checkbox]')) b.disabled = false;
+      if(!disposed) for (const b of panel.querySelectorAll('button, input[type=checkbox]')) b.disabled = false;
     }
   };
   ask.addEventListener('submit', ev => {
