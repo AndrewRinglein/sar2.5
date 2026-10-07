@@ -40,8 +40,7 @@ export const CSP_DIRECTIVES = Object.freeze({
   'img-src': ["'self'", 'data:', 'https://tile.openstreetmap.org'],
   'connect-src': [
     "'self'",
-    'https://faoqpyjhwvwgwvmgqxjr.supabase.co',
-    'wss://faoqpyjhwvwgwvmgqxjr.supabase.co',
+    'wss://lkcfbgnuodqzvowschjn.supabase.co',
     'https://lkcfbgnuodqzvowschjn.supabase.co',
   ],
   'base-uri': ["'self'"],

@@ -10,8 +10,10 @@
  * its request into { method, url, headers, readBody } and writes back the
  * { status, headers, body } this returns.
  */
-import { SUPABASE_URL, SUPABASE_KEY, CUSTOMER_ID } from '../src/lib/config.js';
+import { SUPABASE_URL, SUPABASE_KEY } from '../src/lib/config.js';
 import { readOperations, readAnthropicKey } from './ops-read.mjs';
+import { readAnalytics } from './analytics-read.mjs';
+import { LOGIN_MESSAGE } from './sar-login.mjs';
 import { readCompetitive } from './competitive.mjs';
 import {
   MAX_CONTEXT_CHARS, MAX_BODY_BYTES, MAX_HISTORY_TURNS, MAX_HISTORY_CHARS,
@@ -44,11 +46,14 @@ export {
 };
 
 /** The three routes, by name, with the one method each accepts. */
-export const ROUTES = Object.freeze({ operations: 'GET', 'ask-sar': 'POST', competitive: 'GET' });
+export const ROUTES = Object.freeze({ operations: 'GET', 'ask-sar': 'POST', competitive: 'GET', access: 'GET', analytics: 'GET', login: 'POST' });
 
 const TOO_LARGE = 'That question carries too much data to send. Narrow it to one hall or a shorter period and try again.';
 
 const UNAVAILABLE = Object.freeze({
+  access: 'Sign-in verification is temporarily unavailable.',
+  analytics: 'Analytics data is temporarily unavailable.',
+  login: 'Sign-in email is temporarily unavailable. Please try again later.',
   operations: 'Operations data is temporarily unavailable.',
   'ask-sar': 'Ask SAR is temporarily unavailable.',
   competitive: 'Competitive data is temporarily unavailable.',
@@ -114,21 +119,18 @@ export function quotaDay(at = Date.now()) {
     .format(new Date(at));
 }
 
-// Validate the existing ecom identity AND its Vanguard data access before
-// using any fixed Operations credentials. Client-side role checks are not enough.
-export async function authorize(header, fetchImpl = fetch) {
+// Verify identity with Operations Auth, then check server-owned membership.
+export async function authorize(header, fetchImpl = fetch, pool = null) {
   if (!/^Bearer [^\s]+$/.test(header ?? '')) return null;
-  const headers = { apikey: SUPABASE_KEY, authorization: header };
-  const user = await fetchImpl(`${SUPABASE_URL}/auth/v1/user`,
-    { headers, signal: AbortSignal.timeout(15000) });
+  const user = await fetchImpl(SUPABASE_URL + '/auth/v1/user', {
+    headers: { apikey: SUPABASE_KEY, authorization: header }, signal: AbortSignal.timeout(15000),
+  });
   if (!user.ok) return null;
   const identity = await user.json();
-  if (!identity.id) return null;
-  const url = new URL('/rest/v1/analytics_events', SUPABASE_URL);
-  url.search = new URLSearchParams({ select: 'id', customer_id: `eq.${CUSTOMER_ID}`, limit: '1' });
-  const probe = await fetchImpl(url, { headers, signal: AbortSignal.timeout(15000) });
-  if (!probe.ok || !(await probe.json()).length) return null;
-  return identity.id;
+  if (!identity.id || !identity.email_confirmed_at || typeof identity.email !== 'string') return null;
+  if (!pool) throw Error('Access store unavailable');
+  const { rows } = await pool.query('SELECT email FROM sar_bms.members WHERE email = $1 AND enabled', [identity.email.trim().toLowerCase()]);
+  return rows.length ? identity.id : null;
 }
 
 export function validQuestion(body) {
@@ -175,7 +177,7 @@ const JSON_HEADERS = Object.freeze({
 export function createApiCore({ prefixes = ['/api'], cors = null, pool = null, fetchImpl = fetch,
   loadOperations = readOperations, loadKey = readAnthropicKey, apiKey = null,
   authenticate = authorize, model = DEFAULT_MODEL, now = Date.now,
-  knowledge = () => '' } = {}) {
+  knowledge = () => '', sendLogin = null, loadAnalytics = readAnalytics } = {}) {
   const rates = new Map();
   const allowedOrigins = cors ? new Set(cors.origins) : null;
   // In-memory daily usage, used only where the persistent table cannot be.
@@ -231,8 +233,22 @@ export function createApiCore({ prefixes = ['/api'], cors = null, pool = null, f
     if (method !== ROUTES[route]) return send(405, { error: 'Method not allowed.' });
     if (!originOk) return send(403, { error: 'Request not allowed.' });
     try {
-      const userId = await authenticate(headers.authorization, fetchImpl);
+      if (route === 'login') {
+        let body;
+        try { body = await readBody(1024); } catch { return send(400, { error: 'Enter a valid email address.' }); }
+        const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
+        if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return send(400, { error: 'Enter a valid email address.' });
+        if (!sendLogin) return send(503, { error: UNAVAILABLE.login });
+        await sendLogin(email);
+        return send(200, { ok: true, message: LOGIN_MESSAGE });
+      }
+      const userId = await authenticate(headers.authorization, fetchImpl, pool);
       if (!userId) return send(401, { error: 'Please sign in to SAR with an authorized account.' });
+      if (route === 'access') return send(200, { allowed: true });
+      if (route === 'analytics') {
+        if (!pool) return send(503, { error: UNAVAILABLE.analytics });
+        return send(200, await loadAnalytics(pool));
+      }
       if (route === 'competitive') return send(200, await readCompetitive(url, fetchImpl));
       if (route === 'operations') {
         if (!pool) return send(503, { error: UNAVAILABLE.operations });

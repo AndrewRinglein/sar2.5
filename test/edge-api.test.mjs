@@ -60,7 +60,7 @@ for (const [name, call] of runtimes) {
     }
   });
 
-  test(`${name}: a token that bms-production rejects, or without Vanguard access, is 401`, async () => {
+  test(`${name}: a token that Operations rejects, or without Vanguard access, is 401`, async () => {
     for (const fetchImpl of [
       async () => ({ ok: false, status: 401, json: async () => ({}) }),
       async (url) => String(url).includes('/auth/v1/user') ? ok({ id: 'u1' }) : ok([]),
@@ -71,19 +71,19 @@ for (const [name, call] of runtimes) {
     }
   });
 
-  test(`${name}: the token is verified at bms-production with the publishable key`, async () => {
+  test(`${name}: the token is verified at Operations with the publishable key`, async () => {
     const calls = [];
     const fetchImpl = async (url, options) => {
       calls.push({ url: String(url), options });
-      return String(url).includes('/auth/v1/user') ? ok({ id: 'viewer' }) : ok([{ id: 'e1' }]);
+      return String(url).includes('/auth/v1/user') ? ok({ id: 'viewer', email: 'member@example.com', email_confirmed_at: '2026-10-07' }) : assert.fail('unexpected upstream');
     };
-    const r = await call({ pool: {}, fetchImpl, loadOperations: async () => ({ ok: true, staff: [] }) },
+    const r = await call({ pool: { query: async (sql, args) => { assert.match(sql, /sar_bms.members/); assert.deepEqual(args, ['member@example.com']); return { rows: [{}] }; } }, fetchImpl, loadOperations: async () => ({ ok: true, staff: [] }) },
       { path: 'operations', authorization: 'Bearer good-token' });
     assert.equal(r.status, 200);
     assert.deepEqual(r.result, { ok: true, staff: [] });
     assert.equal(calls[0].url, `${SUPABASE_URL}/auth/v1/user`);
-    assert.equal(SUPABASE_URL, 'https://faoqpyjhwvwgwvmgqxjr.supabase.co');
-    assert.match(calls[1].url, /\/rest\/v1\/analytics_events\?.*customer_id=eq\.vanguard/);
+    assert.equal(SUPABASE_URL, 'https://lkcfbgnuodqzvowschjn.supabase.co');
+    assert.equal(calls.length, 1, 'no BMS runtime request');
     for (const c of calls) {
       assert.equal(c.options.headers.apikey, SUPABASE_KEY);
       assert.equal(c.options.headers.authorization, 'Bearer good-token');
@@ -316,7 +316,7 @@ test('browser: localhost keeps the local /api; every other host uses the Edge Fu
   assert.equal(apiUrl('/api/ask-sar', 'andrewringlein.github.io'), `${EDGE_API_BASE}/ask-sar`);
 });
 
-test('browser: serverRequest sends the bms-production token to the chosen base', async () => {
+test('browser: serverRequest sends the Operations token to the chosen base', async () => {
   const { serverRequest } = await import('../src/lib/server-request.js');
   const { supabase } = await import('../src/lib/api.js');
   const original = supabase.auth.getSession;
@@ -353,9 +353,14 @@ test('the Edge bundle is self-contained: only npm: imports, knowledge inlined, n
   assert.match(bundle, /Deno\.serve\(/);
   assert.match(bundle, /Deno\.env\.get/);
   assert.doesNotMatch(bundle, /sk-ant-[A-Za-z0-9_-]{8,}/);
-  assert.doesNotMatch(bundle, /SUPABASE_SERVICE_ROLE|service_role/);
+  // Admin credentials are read only from the server environment to generate login links.
+  assert.match(bundle, /env\("SUPABASE_SERVICE_ROLE_KEY"\)/);
+  assert.doesNotMatch(bundle, /eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\./);
+  for (const file of ['src/lib/api.js', 'src/lib/config.js', 'src/main.js']) {
+    assert.doesNotMatch(readFileSync(new URL(`../${file}`, import.meta.url), 'utf8'), /SUPABASE_SERVICE_ROLE|RESEND_API_KEY|service_role/);
+  }
   assert.match(readFileSync(new URL('../supabase/config.toml', import.meta.url), 'utf8'),
-    /\[functions\.sar2-api\]\s*\n(?:#.*\n)*verify_jwt = false/);
+    /\[functions\.sar2-api\]\s*\r?\n(?:#.*\r?\n)*verify_jwt = false/);
 });
 
 test('shared server modules are runtime-neutral (no Node-only or driver imports)', () => {

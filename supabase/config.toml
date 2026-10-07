@@ -3,8 +3,7 @@
 project_id = "sar2"
 
 [functions.sar2-api]
-# The caller's token comes from bms-production, a DIFFERENT Supabase project,
-# so the gateway's own JWT check would reject every request. The function
-# verifies the token itself against bms-production (server/api-core.mjs,
-# authorize) before doing anything else. Deploy with this set to false.
+# Login requests are public but restricted to the private membership list.
+# Every data request verifies Operations Auth and enabled SAR membership in
+# server/api-core.mjs before reading data. Credentials remain server-only.
 verify_jwt = false

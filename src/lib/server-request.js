@@ -26,6 +26,10 @@ export async function serverRequest(path, { body, fetchImpl = globalThis.fetch, 
     signal: AbortSignal.timeout(60000),
   });
   const result = await response.json();
-  if (!response.ok) throw new Error(result.error || 'The service is temporarily unavailable.');
+  if (!response.ok) {
+    const error = new Error(result.error || 'The service is temporarily unavailable.');
+    error.status = response.status;
+    throw error;
+  }
   return result;
 }

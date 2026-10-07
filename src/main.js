@@ -1,22 +1,6 @@
-/* ============================================================================
-   SAR 2.0 — boot
-
-   U1 built the skeleton. U2 adds the production read layer and the sign-in
-   boundary.
-
-   WHY THERE IS A SIGN-IN AT ALL
-   The original design was a link with a token and no login. That is not
-   possible against this database. Every analytics table is gated by
-   `analytics_has_access(customer_id)`, which needs `auth.uid()` and a role in
-   `user_roles`. Signed out, PostgREST returns 200 with an empty array — so a
-   no-login build would have rendered blank screens and looked like a database
-   with no data in it. Verified against production, 12 Aug 2026. SAR 1.0 signs
-   people in for exactly this reason; SAR 2.0 does the same, with Google.
-   ========================================================================== */
-
 import './styles.css';
 import {
-  currentUser, onAuthChange, signInWithGoogle, signInWithPassword, signOut,
+  currentUser, onAuthChange, sendSignInLink, signOut,
   bootstrap, getPromotions, getMonthlySummary, getNotifications, currentUser as whoami, NotSignedIn, NoAccess,
 } from './lib/api.js';
 import { CUSTOMER_ID, CACHE_TTL_MS } from './lib/config.js';
@@ -90,79 +74,41 @@ function shell({ title, body, status, statusKind = '', action }) {
     </div>`);
 }
 
-/**
- * Sign-in.
- *
- * Email and password is the primary route because it needs no redirect and
- * therefore no Supabase configuration — it works from localhost and from any
- * host. Google is offered second, and is honest about only working from an
- * approved address rather than silently bouncing the user to another site,
- * which is exactly what it did the first time it was tried.
- */
 function signInScreen(err) {
   const v = shell({
-    body: 'Sign in with the account that has your SAR access.',
-    action: `
-      <form id="pw" style="display:grid;gap:var(--s-3);max-width:19rem;margin:0 auto;text-align:left">
-        <label style="display:grid;gap:var(--s-1)">
-          <span class="dim" style="font-size:var(--t-sm)">Email</span>
-          <input id="email" type="email" autocomplete="username" required>
-        </label>
-        <label style="display:grid;gap:var(--s-1)">
-          <span class="dim" style="font-size:var(--t-sm)">Password</span>
-          <input id="password" type="password" autocomplete="current-password" required>
-        </label>
-        <button id="go" class="primary" type="submit">Sign in</button>
-      </form>
-      <p class="dim" style="font-size:var(--t-sm);margin-top:var(--s-4)">
-        <button id="google" type="button">Sign in with Google</button><br>
-        <span style="display:inline-block;margin-top:var(--s-2)">
-          Google only works when this app is served from an approved address.
-        </span>
-      </p>`,
-    status: err || null,
-    statusKind: err ? 'err' : '',
+    body: 'Enter your approved email address. We will email you a secure sign-in link.',
+    action: `<form id="email-login" style="display:grid;gap:var(--s-3);max-width:19rem;margin:0 auto;text-align:left">
+      <label style="display:grid;gap:var(--s-1)"><span class="dim">Email</span>
+        <input id="email" type="email" autocomplete="email" required></label>
+      <button id="go" class="primary" type="submit">Send sign-in link</button>
+    </form>
+    <p class="dim" style="font-size:var(--t-sm)">No Google login or password needed.</p>`,
+    status: err || null, statusKind: err ? 'err' : '',
   });
-
-  v.querySelector('#pw').addEventListener('submit', async (e) => {
+  v.querySelector('#email-login').addEventListener('submit', async e => {
     e.preventDefault();
     const btn = v.querySelector('#go');
-    btn.disabled = true;
-    btn.textContent = 'Signing in…';
+    btn.disabled = true; btn.textContent = 'Sending…';
+    const status = v.querySelector('.boot-status') || v.querySelector('.boot-inner').appendChild(el('<div class="boot-status" role="status"></div>'));
     try {
-      await signInWithPassword(v.querySelector('#email').value, v.querySelector('#password').value);
-      // onAuthChange re-boots; nothing to do here.
-    } catch (ex) {
-      btn.disabled = false;
-      btn.textContent = 'Sign in';
-      const s = v.querySelector('.boot-status') || v.querySelector('.boot-inner').appendChild(el('<div class="boot-status err" role="status"><span class="dot"></span></div>'));
-      s.className = 'boot-status err';
-      s.innerHTML = `<span class="dot"></span>${esc(ex.message)}`;
+      status.textContent = await sendSignInLink(v.querySelector('#email').value);
+      status.className = 'boot-status';
+      btn.textContent = 'Link requested';
+      setTimeout(() => { btn.disabled = false; btn.textContent = 'Send another link'; }, 60000);
+    } catch (error) {
+      status.textContent = error.message; status.className = 'boot-status err';
+      btn.disabled = false; btn.textContent = 'Send sign-in link';
     }
   });
-
-  v.querySelector('#google').addEventListener('click', async (e) => {
-    e.target.disabled = true;
-    e.target.textContent = 'Redirecting…';
-    try {
-      await signInWithGoogle();
-    } catch (ex) {
-      e.target.disabled = false;
-      e.target.textContent = 'Sign in with Google';
-      mount(signInScreen(ex.message));
-    }
-  });
-
   return v;
 }
 
 function noAccessScreen(user) {
   const v = shell({
     title: 'Signed in, but no SAR access',
-    body: `<code>${esc(user.email)}</code> has no Vanguard SAR role. Ask an administrator
-           to grant one, then reload.`,
+    body: `<code>${esc(user.email)}</code> has not been approved for SAR access. Ask Andrew to add this email, then reload.`,
     action: '<button id="out">Sign out</button>',
-    status: 'No role in user_roles for this account',
+    status: 'Email not on the SAR access list',
     statusKind: 'err',
   });
   v.querySelector('#out').addEventListener('click', async () => {
@@ -383,6 +329,7 @@ function renderScreen(route, data) {
       : `${screen.group} · ${screen.unit}`,
     filters: [
       { label: 'Tenant', value: CUSTOMER_ID },
+      ...(data.snapshotAt ? [{ label: 'Analytics copied', value: new Date(data.snapshotAt).toLocaleString() }] : []),
       { label: 'Sessions', value: data.events.length.toLocaleString() },
       { label: 'Range', value: data.events.length
         ? `${data.events[data.events.length - 1].event_date} to ${data.events[0].event_date}`
@@ -466,7 +413,7 @@ async function refreshInBackground(data, current) {
   try {
     const fresh = await bootstrap({ force: true });
     if (!current()) return;
-    for (const k of ['config', 'metricDefs', 'categories', 'locations', 'events', 'metrics', 'runners', 'runnerEvents', 'stale', 'at']) {
+    for (const k of ['config', 'metricDefs', 'categories', 'locations', 'events', 'metrics', 'runners', 'runnerEvents', 'snapshotAt', 'stale', 'at']) {
       data[k] = fresh[k];
     }
     data.idx = indexMetrics(data.metricDefs);

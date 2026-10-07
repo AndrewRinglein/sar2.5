@@ -45,7 +45,9 @@ test('every host the app talks to is allowed, and no other', () => {
   for (const url of [SUPABASE_URL, OPS_URL]) assert.ok(connect.includes(origin(url)), url);
   assert.ok(connect.includes(origin(SUPABASE_URL).replace('https:', 'wss:')), 'Supabase realtime');
   assert.deepEqual(connect.filter((s) => s !== "'self'").map((s) => new URL(s).hostname).sort(),
-    [new URL(OPS_URL).hostname, new URL(SUPABASE_URL).hostname, new URL(SUPABASE_URL).hostname].sort());
+    [new URL(OPS_URL).hostname, new URL(SUPABASE_URL).hostname].sort());
+
+  assert.doesNotMatch(cspString(), /faoqpyjhwvwgwvmgqxjr/, 'BMS is not a browser destination');
 
   // Map tiles: the host competition.js asks Leaflet for.
   const tiles = /tileLayer\('([^']+)'/.exec(read('src/screens/competition.js'))[1];

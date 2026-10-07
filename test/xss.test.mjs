@@ -453,9 +453,10 @@ test('main.js escapes the error message, email, status and tenant name it interp
   for (const raw of ['${ex.message}', '${user.email}', '${status}', '${orgName}', '<h2>${screen.label}']) {
     assert.ok(!src.includes(raw), `main.js interpolates ${raw} without esc()`);
   }
-  for (const safe of ['${esc(ex.message)}', '${esc(user.email)}', '${esc(status)}', '${esc(orgName)}']) {
+  for (const safe of ['${esc(user.email)}', '${esc(status)}', '${esc(orgName)}']) {
     assert.ok(src.includes(safe), `main.js should interpolate ${safe}`);
   }
+  assert.match(src, /status\.textContent = error\.message/, 'login errors must use a text-only sink');
   // The unknown route id goes through inspectorIdle, which escapes (above).
   assert.match(src, /description: route\.unknown/);
 });

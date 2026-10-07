@@ -157,19 +157,12 @@ o/bKiIz+Fq8=
 `.trim();
 
 // src/lib/config.js
-var SUPABASE_URL = "https://faoqpyjhwvwgwvmgqxjr.supabase.co";
-var SUPABASE_KEY = "sb_publishable_rVzwH5plpZ3Z9yJvw4BLIg_4ZuJC0oT";
-var CUSTOMER_ID = "vanguard";
+var SUPABASE_URL = "https://lkcfbgnuodqzvowschjn.supabase.co";
+var SUPABASE_KEY = "sb_publishable_t3vO3q1Y7PRH3qVp_64dfg_L4Zr1fIT";
 var OPS_URL = "https://lkcfbgnuodqzvowschjn.supabase.co";
 var EDGE_API_BASE = `${OPS_URL}/functions/v1/sar2-api`;
 var LOCAL_HOSTNAMES = Object.freeze(["localhost", "127.0.0.1"]);
 var CACHE_TTL_MS = 5 * 60 * 1e3;
-var PUBLIC_TABLES = Object.freeze([
-  "analytics_config",
-  "analytics_metric_definitions",
-  // is_active = true only
-  "analytics_product_categories"
-]);
 var OWNER_CLOSURES = Object.freeze([
   Object.freeze({ holiday: "christmas", hall: "SC", confirmed: "2026-10-01" })
 ]);
@@ -451,6 +444,85 @@ async function readAnthropicKey(pool) {
   return rows[0]?.decrypted_secret || null;
 }
 
+// server/analytics-read.mjs
+var ANALYTICS_QUERIES = Object.freeze({
+  config: "SELECT name, timezone, currency, settings, logo_url FROM sar_bms.analytics_config WHERE customer_id = 'vanguard'",
+  metricDefs: "SELECT id, key, canonical_key, display_name, display_order, metric_type, data_type, aggregation, is_computed, formula, is_active FROM sar_bms.analytics_metric_definitions WHERE customer_id = 'vanguard' AND is_active ORDER BY display_order, id",
+  categories: "SELECT id, key, display_name, display_order, color_bg_from, color_bg_to, color_border, color_text, color_text_dark, show_rpa, show_margin FROM sar_bms.analytics_product_categories WHERE customer_id = 'vanguard' AND is_active ORDER BY display_order, id",
+  categoryMetrics: "SELECT category_id, metric_key, role FROM sar_bms.analytics_product_category_metrics WHERE category_id IN (SELECT id FROM sar_bms.analytics_product_categories WHERE customer_id = 'vanguard') ORDER BY id",
+  locations: "SELECT id, name, code, settings FROM sar_bms.locations WHERE customer_id = 'vanguard' ORDER BY name, id",
+  events: "SELECT id, customer_id, location_id, event_date, event_type, day_of_week, attendance, notes, metadata, created_at, updated_at FROM sar_bms.analytics_events WHERE customer_id = 'vanguard' ORDER BY event_date DESC, id",
+  metricRows: "SELECT event_id, metric_id, value FROM sar_bms.analytics_event_data WHERE event_id IN (SELECT id FROM sar_bms.analytics_events WHERE customer_id = 'vanguard') ORDER BY id",
+  runners: "SELECT id, name, is_active, staff_id FROM sar_bms.flash_runners WHERE customer_id = 'vanguard' AND is_active ORDER BY name, id",
+  runnerEvents: "SELECT id, runner_id, event_id, location_id, event_date, event_type, is_flash_desk, tickets_checked_out, tickets_sold, tickets_returned, tickets_unsold, cash_returned, credit_cards, revenue, restock_count FROM sar_bms.flash_runner_events WHERE customer_id = 'vanguard' AND runner_id IN (SELECT id FROM sar_bms.flash_runners WHERE customer_id = 'vanguard' AND is_active) ORDER BY event_date DESC, id",
+  promotions: "SELECT id, code, name, description, promo_type, discount_type, discount_value, valid_from, valid_to, max_uses, current_uses, is_active FROM sar_bms.promotions WHERE customer_id = 'vanguard' ORDER BY id",
+  monthlySummary: "SELECT location_id, month, event_count, total_sales, net_sales, total_attendance FROM sar_bms.analytics_monthly_summary WHERE customer_id = 'vanguard' ORDER BY location_id, month",
+  notifications: "SELECT id, event_type, severity, title, body, entity_type, entity_id, created_at FROM sar_bms.notifications WHERE customer_id = 'vanguard' AND user_id IS NULL ORDER BY created_at DESC, id LIMIT 500"
+});
+async function readAnalytics(pool) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
+    const { rows } = await client.query("SELECT verified_at FROM sar_bms.import_manifest WHERE customer_id = 'vanguard' AND status = 'verified' ORDER BY verified_at DESC LIMIT 1");
+    if (!rows[0]?.verified_at) throw Error("No verified snapshot");
+    const data = { snapshotAt: rows[0].verified_at };
+    for (const [key, sql] of Object.entries(ANALYTICS_QUERIES)) data[key] = (await client.query(sql)).rows;
+    await client.query("COMMIT");
+    return data;
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => {
+    });
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+// server/sar-login.mjs
+var SAR_RETURN_URL = "https://andrewringlein.github.io/sar2.5/";
+var LOGIN_MESSAGE = "If this email has SAR access, a sign-in link is on its way. Check your inbox and spam folder. Please wait a minute before requesting another.";
+var LOGIN_SLOT_SQL = `UPDATE sar_bms.members SET
+  requested_at = now(),
+  requests = CASE WHEN window_start IS NULL OR window_start <= now() - interval '1 hour' THEN 1 ELSE requests + 1 END,
+  window_start = CASE WHEN window_start IS NULL OR window_start <= now() - interval '1 hour' THEN now() ELSE window_start END
+WHERE email = $1 AND enabled
+  AND (requested_at IS NULL OR requested_at <= now() - interval '1 minute')
+  AND (window_start IS NULL OR window_start <= now() - interval '1 hour' OR requests < 5)
+RETURNING email`;
+function createLoginSender({ pool, serviceKey, mailKey, fetchImpl = fetch }) {
+  return async (email) => {
+    if (!pool || !serviceKey || !mailKey) throw Error("Login unavailable");
+    const slot = await pool.query(LOGIN_SLOT_SQL, [email]);
+    if (!slot.rows.length) return;
+    const response = await fetchImpl(`${SUPABASE_URL}/auth/v1/admin/generate_link?redirect_to=${encodeURIComponent(SAR_RETURN_URL)}`, {
+      method: "POST",
+      headers: { apikey: serviceKey, authorization: `Bearer ${serviceKey}`, "content-type": "application/json" },
+      body: JSON.stringify({ type: "magiclink", email }),
+      signal: AbortSignal.timeout(15e3)
+    });
+    if (!response.ok) throw Error("Login unavailable");
+    const generated = await response.json();
+    const link = new URL(generated.action_link);
+    if (link.origin !== SUPABASE_URL || link.pathname !== "/auth/v1/verify" || link.searchParams.get("redirect_to") !== SAR_RETURN_URL) throw Error("Invalid login destination");
+    const sent = await fetchImpl("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { authorization: `Bearer ${mailKey}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        from: "SAR <inventory@frontiergamingsystems.com>",
+        to: [email],
+        subject: "Your SAR sign-in link",
+        text: `Sign in to Session Analysis Reporting:
+
+${link.href}
+
+Use this single-use link soon. If you did not request it, you can ignore this email.`
+      }),
+      signal: AbortSignal.timeout(15e3)
+    });
+    if (!sent.ok) throw Error("Email unavailable");
+  };
+}
+
 // server/competitive.mjs
 var MONITOR_URL = "https://frontier-bingo-text-monitor.andrew595321.chatgpt.site/api/monitor";
 async function readCompetitive(query, fetchImpl = fetch) {
@@ -501,9 +573,12 @@ var SYSTEM_PROMPT = [
   'Be concise. End every answer with one line starting "Basis:" naming the halls, period and number of sessions or months used.'
 ].join("\n");
 var MAX_KNOWLEDGE_CHARS = 6e4;
-var ROUTES = Object.freeze({ operations: "GET", "ask-sar": "POST", competitive: "GET" });
+var ROUTES = Object.freeze({ operations: "GET", "ask-sar": "POST", competitive: "GET", access: "GET", analytics: "GET", login: "POST" });
 var TOO_LARGE = "That question carries too much data to send. Narrow it to one hall or a shorter period and try again.";
 var UNAVAILABLE = Object.freeze({
+  access: "Sign-in verification is temporarily unavailable.",
+  analytics: "Analytics data is temporarily unavailable.",
+  login: "Sign-in email is temporarily unavailable. Please try again later.",
   operations: "Operations data is temporarily unavailable.",
   "ask-sar": "Ask SAR is temporarily unavailable.",
   competitive: "Competitive data is temporarily unavailable."
@@ -540,21 +615,18 @@ var USAGE_UNAVAILABLE = Object.freeze({
 function quotaDay(at = Date.now()) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: ASK_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(at));
 }
-async function authorize(header, fetchImpl = fetch) {
+async function authorize(header, fetchImpl = fetch, pool = null) {
   if (!/^Bearer [^\s]+$/.test(header ?? "")) return null;
-  const headers = { apikey: SUPABASE_KEY, authorization: header };
-  const user = await fetchImpl(
-    `${SUPABASE_URL}/auth/v1/user`,
-    { headers, signal: AbortSignal.timeout(15e3) }
-  );
+  const user = await fetchImpl(SUPABASE_URL + "/auth/v1/user", {
+    headers: { apikey: SUPABASE_KEY, authorization: header },
+    signal: AbortSignal.timeout(15e3)
+  });
   if (!user.ok) return null;
   const identity = await user.json();
-  if (!identity.id) return null;
-  const url = new URL("/rest/v1/analytics_events", SUPABASE_URL);
-  url.search = new URLSearchParams({ select: "id", customer_id: `eq.${CUSTOMER_ID}`, limit: "1" });
-  const probe = await fetchImpl(url, { headers, signal: AbortSignal.timeout(15e3) });
-  if (!probe.ok || !(await probe.json()).length) return null;
-  return identity.id;
+  if (!identity.id || !identity.email_confirmed_at || typeof identity.email !== "string") return null;
+  if (!pool) throw Error("Access store unavailable");
+  const { rows } = await pool.query("SELECT email FROM sar_bms.members WHERE email = $1 AND enabled", [identity.email.trim().toLowerCase()]);
+  return rows.length ? identity.id : null;
 }
 function validQuestion(body) {
   return typeof body?.question === "string" && body.question.trim().length > 0 && body.question.length <= 2e3 && body.context && typeof body.context === "object" && !Array.isArray(body.context) && (body.history === void 0 || Array.isArray(body.history));
@@ -583,7 +655,9 @@ function createApiCore({
   authenticate = authorize,
   model = DEFAULT_MODEL,
   now = Date.now,
-  knowledge = () => ""
+  knowledge = () => "",
+  sendLogin = null,
+  loadAnalytics = readAnalytics
 } = {}) {
   const rates = /* @__PURE__ */ new Map();
   const allowedOrigins = cors ? new Set(cors.origins) : null;
@@ -634,8 +708,26 @@ function createApiCore({
     if (method !== ROUTES[route]) return send(405, { error: "Method not allowed." });
     if (!originOk) return send(403, { error: "Request not allowed." });
     try {
-      const userId = await authenticate(headers.authorization, fetchImpl);
+      if (route === "login") {
+        let body2;
+        try {
+          body2 = await readBody(1024);
+        } catch {
+          return send(400, { error: "Enter a valid email address." });
+        }
+        const email = typeof body2?.email === "string" ? body2.email.trim().toLowerCase() : "";
+        if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return send(400, { error: "Enter a valid email address." });
+        if (!sendLogin) return send(503, { error: UNAVAILABLE.login });
+        await sendLogin(email);
+        return send(200, { ok: true, message: LOGIN_MESSAGE });
+      }
+      const userId = await authenticate(headers.authorization, fetchImpl, pool);
       if (!userId) return send(401, { error: "Please sign in to SAR with an authorized account." });
+      if (route === "access") return send(200, { allowed: true });
+      if (route === "analytics") {
+        if (!pool) return send(503, { error: UNAVAILABLE.analytics });
+        return send(200, await loadAnalytics(pool));
+      }
       if (route === "competitive") return send(200, await readCompetitive(url, fetchImpl));
       if (route === "operations") {
         if (!pool) return send(503, { error: UNAVAILABLE.operations });
@@ -785,6 +877,7 @@ function createEdgeServer({ env, pg: pg2, knowledge = "", ca = null, ...override
     apiKey,
     model: env("SAR_ANTHROPIC_MODEL") || DEFAULT_MODEL,
     knowledge: () => text,
+    sendLogin: createLoginSender({ pool, serviceKey: env("SUPABASE_SERVICE_ROLE_KEY"), mailKey: env("RESEND_API_KEY") }),
     ...overrides
   });
 }

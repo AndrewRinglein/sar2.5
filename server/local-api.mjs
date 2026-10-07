@@ -37,10 +37,10 @@ async function readBody(req, maxBytes) {
 export function createLocalApi({ pool = null, fetchImpl = fetch,
   loadOperations = readOperations, loadKey = readAnthropicKey, apiKey = null,
   authenticate = authorize, model = DEFAULT_MODEL, now = Date.now,
-  knowledge = loadKnowledge } = {}) {
+  knowledge = loadKnowledge, ...extras } = {}) {
   // Same-origin only (cors: null): the browser reaches this through Vite.
   const handle = createApiCore({ prefixes: ['/api'], cors: null, pool, fetchImpl,
-    loadOperations, loadKey, apiKey, authenticate, model, now, knowledge });
+    loadOperations, loadKey, apiKey, authenticate, model, now, knowledge, ...extras });
   return async (req, res, next) => {
     const result = await handle({ method: req.method, url: req.url ?? '', headers: req.headers ?? {},
       readBody: maxBytes => readBody(req, maxBytes) });

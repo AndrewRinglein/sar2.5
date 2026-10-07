@@ -39,18 +39,18 @@ test('server refuses database access without a verified SAR identity', async () 
   assert.equal(reads, 0);
 });
 
-test('server verifies identity against ecom and probes Vanguard access with the same token', async () => {
+test('server verifies Operations identity and server-owned membership', async () => {
   const calls = [];
   const user = await authorize('Bearer signed-session', async (url, options) => {
     calls.push({ url: String(url), options });
-    return { ok: true, json: async () => calls.length === 1 ? { id: 'viewer' } : [{ id: 'event' }] };
-  });
+    return { ok: true, json: async () => ({ id: 'viewer', email: 'member@example.com', email_confirmed_at: '2026-10-07' }) };
+  }, { query: async (sql, args) => {
+    assert.match(sql, /sar_bms.members/); assert.deepEqual(args, ['member@example.com']); return { rows: [{}] };
+  } });
   assert.equal(user, 'viewer');
-  assert.match(calls[1].url, /customer_id=eq.vanguard/);
-  assert.ok(calls.every(c => c.options.headers.authorization === 'Bearer signed-session'));
-  assert.equal(await authorize('Bearer denied', async url => ({
-    ok: true, json: async () => String(url).includes('/auth/') ? { id: 'viewer' } : [],
-  })), null);
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].url, /lkcfbgnuodqzvowschjn/);
+  assert.equal(calls[0].options.headers.authorization, 'Bearer signed-session');
   assert.equal(await authorize(undefined, () => { throw Error('should not call'); }), null);
 });
 

@@ -10,11 +10,12 @@
  *   OPTIONS on any of them        CORS preflight for the origins below
  *
  * The function is deployed with verify_jwt = false because the caller's token
- * comes from a different project (bms-production). The token check inside
+ * is checked with Operations Auth and the SAR membership list. The check inside
  * api-core.mjs (authorize) is therefore the ONLY gate, and it runs on every
  * non-preflight request before any data is read or any key is used.
  */
 import { createApiCore, DEFAULT_MODEL, MAX_KNOWLEDGE_CHARS } from './api-core.mjs';
+import { createLoginSender } from './sar-login.mjs';
 import { databaseOptions, keepDatesAsText } from './ops-read.mjs';
 
 /** Browser origins allowed to call the function. The one list. */
@@ -106,5 +107,5 @@ export function createEdgeServer({ env, pg, knowledge = '', ca = null, ...overri
   const apiKey = /^sk-ant-/.test(rawKey) ? rawKey : null;
   const text = String(knowledge ?? '').slice(0, MAX_KNOWLEDGE_CHARS);
   return createEdgeHandler({ pool, apiKey, model: env('SAR_ANTHROPIC_MODEL') || DEFAULT_MODEL,
-    knowledge: () => text, ...overrides });
+    knowledge: () => text, sendLogin: createLoginSender({ pool, serviceKey: env('SUPABASE_SERVICE_ROLE_KEY'), mailKey: env('RESEND_API_KEY') }), ...overrides });
 }

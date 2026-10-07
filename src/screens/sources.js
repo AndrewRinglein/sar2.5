@@ -50,7 +50,7 @@ export function sourceList(data) {
     {
       group: 'Analytics', project: ref(SUPABASE_URL), url: SUPABASE_URL,
       state: 'connected',
-      note: `Every money figure in SAR. Tenant "${CUSTOMER_ID}".`,
+      note: `Verified BMS copy in Operations (not a live BMS connection). Tenant "${CUSTOMER_ID}".`,
       items: [
         { name: 'analytics_events', what: 'one row per session', count: n(data.events) },
         { name: 'analytics_event_data', what: 'the metric store, in cents', count: n(data.metrics) ? Object.keys(data.metrics).length : null },

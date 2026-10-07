@@ -1,42 +1,8 @@
-/* ============================================================================
-   SAR 2.0 — configuration
-
-   THE TARGET DATABASE IS ESTABLISHED HERE, ONCE.
-
-   `bms-production` is the database the running SAR application reads. That was
-   determined by tracing the Supabase client `sar/app.html` constructs — it
-   loads `../fgs-data.js`, which builds the client, and CI rewrites that URL to
-   the production secret on any build of `main`.
-
-   It was NOT determined by reading a project name off a dashboard. A project
-   called "Vanguard SAR + Com + Finances", holding 771 plausible sessions for
-   the right two halls with the right dates, turned out to be an earlier demo
-   build. Most of a working session went into it. See SPEC §3.0.
-
-   READ ONLY. Nothing in this project may create, alter or drop anything in
-   bms-production — no table, no function, no policy, no migration.
-   ========================================================================== */
-
-/** Production. The only analytics source. */
-export const SUPABASE_URL = 'https://faoqpyjhwvwgwvmgqxjr.supabase.co';
-
-/**
- * Publishable key. Public by design — it ships in `fgs-data.js` and on the
- * deployed site. It is not a secret and is not treated as one: on its own it
- * reads nothing, because every analytics table is gated by
- * `analytics_has_access(customer_id)`, which requires a signed-in user with a
- * role in `user_roles`.
- */
-export const SUPABASE_KEY = 'sb_publishable_rVzwH5plpZ3Z9yJvw4BLIg_4ZuJC0oT';
-
-/**
- * The one tenant in scope. Every query is scoped by this EXPLICITLY rather
- * than assuming the data is already filtered — production carries nine
- * customer IDs, and an unscoped query silently mixes another tenant's
- * sessions in, making the numbers merely look slightly wrong.
- */
+/* SAR authenticates against Operations and reads its private Vanguard snapshot.
+ * BMS production is a read-only import source, never a runtime write target. */
+export const SUPABASE_URL = 'https://lkcfbgnuodqzvowschjn.supabase.co';
+export const SUPABASE_KEY = 'sb_publishable_t3vO3q1Y7PRH3qVp_64dfg_L4Zr1fIT';
 export const CUSTOMER_ID = 'vanguard';
-
 /** Operational DB identity for source attribution; reads go through the SAR API below. */
 export const OPS_URL = 'https://lkcfbgnuodqzvowschjn.supabase.co';
 
@@ -48,7 +14,7 @@ export const OPS_URL = 'https://lkcfbgnuodqzvowschjn.supabase.co';
  *   Everywhere else (the GitHub Pages site) the same routes are served by the
  *   Supabase Edge Function `sar2-api` on the Operations project.
  *
- * Either way the browser sends only its bms-production sign-in token; no
+ * Either way the browser sends only its Operations sign-in token; no
  * database or Anthropic credential is ever in the browser.
  */
 export const LOCAL_API_BASE = '/api';
@@ -62,18 +28,6 @@ export function apiBase(hostname = globalThis.location?.hostname ?? '') {
 
 /** How long cached reads stay fresh before a background refresh. */
 export const CACHE_TTL_MS = 5 * 60 * 1000;
-
-/**
- * Tables readable WITHOUT a session, confirmed by a real anon call on
- * 12 Aug 2026. Everything else returns 200 with zero rows when signed out —
- * an empty result, not an error, which is exactly how a broken access model
- * masquerades as an empty database.
- */
-export const PUBLIC_TABLES = Object.freeze([
-  'analytics_config',
-  'analytics_metric_definitions',   // is_active = true only
-  'analytics_product_categories',
-]);
 
 /**
  * Flash ticket price in DOLLARS for this tenant. Confirmed by the owner on

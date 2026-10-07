@@ -1,47 +1,57 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readAnalytics, ANALYTICS_QUERIES } from '../server/analytics-read.mjs';
+import { mapSnapshot } from '../src/lib/analytics-snapshot.js';
 
-const src = readFileSync(new URL('../src/lib/api.js', import.meta.url), 'utf8');
-
-/** The text of every `all(() => …)` builder, up to its closing paren. */
-function pagedQueries(text) {
-  const out = [];
-  let at = 0;
-  for (;;) {
-    const start = text.indexOf('all(() =>', at);
-    if (start < 0) return out;
-    let depth = 0;
-    let i = text.indexOf('(', start);
-    for (; i < text.length; i++) {
-      if (text[i] === '(') depth++;
-      else if (text[i] === ')' && --depth === 0) break;
-    }
-    out.push(text.slice(start, i + 1));
-    at = i + 1;
-  }
-}
-
-test('every paged read has an order ending in a unique key', () => {
-  // Paging with .range() over an unordered (or non-unique ordered) query lets
-  // Postgres hand back rows in a different order per page, so a row can be
-  // read twice and another never. Every paged query ends with a unique key.
-  const queries = pagedQueries(src);
-  assert.ok(queries.length >= 10, `found ${queries.length} paged queries`);
-  for (const q of queries) {
-    const orders = [...q.matchAll(/\.order\('([a-z_]+)'/g)].map((m) => m[1]);
-    assert.ok(orders.length, `paged query has no order:\n${q}`);
-    const last = orders.at(-1);
-    const unique = last === 'id' || (orders.includes('location_id') && last === 'month')
-      || (orders.includes('notification_id') && last === 'user_id');
-    assert.ok(unique, `paged query does not end with a unique key (${orders.join(', ')}):\n${q}`);
+// Direct PostgreSQL replaces REST paging. Keep the completeness regression.
+test('analytics reads over 1000 rows without truncation in a read-only snapshot', async () => {
+  const calls = [];
+  const rows = Array.from({ length: 2501 }, (_, i) => ({ event_id: 'e', metric_id: 'm' + i, value: i }));
+  let released = false;
+  const data = await readAnalytics({ connect: async () => ({
+    query: async sql => {
+      calls.push(sql);
+      return { rows: sql.includes('import_manifest') ? [{ verified_at: '2026-10-07' }]
+        : sql === ANALYTICS_QUERIES.metricRows ? rows : [] };
+    }, release: () => { released = true; },
+  }) });
+  assert.equal(data.metricRows.length, 2501);
+  assert.equal(new Set(data.metricRows.map(r => r.metric_id)).size, 2501);
+  assert.match(calls[0], /REPEATABLE READ READ ONLY/);
+  assert.equal(calls.at(-1), 'COMMIT');
+  assert.equal(released, true);
+  for (const [key, sql] of Object.entries(ANALYTICS_QUERIES)) {
+    assert.doesNotMatch(sql, /SELECT \*|password|email|phone/);
+    assert.match(sql, /customer_id = 'vanguard'/);
+    if (key !== 'notifications') assert.doesNotMatch(sql, /LIMIT|OFFSET/);
   }
 });
 
-test('notifications are read in one bounded page, not through all()', () => {
-  const fn = src.slice(src.indexOf('export async function getNotifications'));
-  const body = fn.slice(0, fn.indexOf('\n}\n'));
-  assert.match(body, /\.range\(0, NOTIFICATION_LIMIT - 1\)/);
-  assert.doesNotMatch(body, /\.limit\(/, '.limit() is overridden by all()\'s .range()');
-  assert.match(body, /ID_CHUNK/, 'read state must be fetched in chunks');
+test('notifications stay bounded and exclude private messages and user read state', () => {
+  assert.match(ANALYTICS_QUERIES.notifications, /user_id IS NULL/);
+  assert.match(ANALYTICS_QUERIES.notifications, /ORDER BY created_at DESC, id LIMIT 500/);
+  assert.ok(!Object.values(ANALYTICS_QUERIES).some(q => q.includes('notification_reads')));
+});
+
+test('an unverified copy rolls back and releases its connection', async () => {
+  const calls = [];
+  await assert.rejects(readAnalytics({ connect: async () => ({
+    query: async sql => { calls.push(sql); return { rows: [] }; },
+    release: () => calls.push('released'),
+  }) }), /No verified snapshot/);
+  assert.deepEqual(calls.slice(-2), ['ROLLBACK', 'released']);
+});
+
+test('snapshot mapping preserves cents, date filters and category signs', () => {
+  const raw = { config: [{ name: 'Vanguard' }], metricDefs: [], locations: [],
+    events: [{ id: 'a', event_date: '2026-10-01' }, { id: 'b', event_date: '2026-09-01' }],
+    metricRows: [{ event_id: 'a', metric_id: 'm', value: 12345 }, { event_id: 'b', metric_id: 'm', value: 999 }],
+    categories: [{ id: 'c' }], categoryMetrics: [{ category_id: 'c', role: 'revenue', metric_key: 'sales' }, { category_id: 'c', role: 'payout', metric_key: 'prizes' }],
+    runners: [], runnerEvents: [], snapshotAt: '2026-10-07' };
+  const mapped = mapSnapshot(raw, '2026-10-01');
+  assert.equal(mapped.events.length, 1);
+  assert.deepEqual(mapped.metrics, { a: { m: 12345 } });
+  assert.deepEqual(mapped.categories[0].revenue_keys, ['sales']);
+  assert.deepEqual(mapped.categories[0].payout_keys, ['prizes']);
+  assert.equal(mapped.snapshotAt, raw.snapshotAt);
 });
