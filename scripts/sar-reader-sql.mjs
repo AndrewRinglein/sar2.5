@@ -1,13 +1,16 @@
 // Builds scripts/create-sar-reader.sql from the read allowlist, so the
 // database login SAR uses can read exactly what SAR reads and nothing else.
 //   node scripts/sar-reader-sql.mjs > scripts/create-sar-reader.sql
-import { COLUMNS, VALIDATOR_TABLE } from '../src/lib/ops-schema.js';
+import {
+  COLUMNS, VALIDATOR_TABLE, HOTBALL_MOVEMENTS_TABLE, HOTBALL_MOVEMENT_GRANT,
+} from '../src/lib/ops-schema.js';
 
 export const READER_ROLE = 'sar_reader';
-/** recon_sessions columns the validator read touches. `state` is reached only
- *  through the projected paths in server/database.mjs. */
+/** recon_sessions columns the validator and hotball reads touch. `state` and
+ *  `hotball_ledger` are reached only through the projected paths in
+ *  server/ops-read.mjs. */
 export const VALIDATOR_GRANT = ['id', 'hall_id', 'session_date', 'session_time', 'slot_name',
-  'status', 'closed_at', 'updated_at', 'state'];
+  'status', 'closed_at', 'updated_at', 'state', 'hotball_ledger'];
 
 /** `game_usage` is a security-invoker view, so the login also needs the
  *  columns the view reads from its base tables (products and vendors are
@@ -46,6 +49,8 @@ export function buildReaderSql() {
     '',
     ...Object.entries(COLUMNS).map(([t, cols]) => grant(t, cols.split(','))),
     grant(VALIDATOR_TABLE, VALIDATOR_GRANT),
+    '-- Hotball pots: cash movements recorded in Session Reconciliation, without who recorded them.',
+    grant(HOTBALL_MOVEMENTS_TABLE, HOTBALL_MOVEMENT_GRANT),
     '-- Base tables behind the game_usage view (it runs with the reader\'s rights).',
     ...Object.entries(VIEW_BASE_GRANTS).map(([t, cols]) => grant(t, cols)),
     '',

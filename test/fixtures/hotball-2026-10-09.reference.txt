@@ -1,0 +1,144 @@
+mega|2026-08-12|18:30 0 72610 Opened on the app default, not a real carry
+mega|2026-08-13|18:30 0 72630 Opened on the app default, not a real carry
+mega|2026-08-15|13:00 0 72630 Opened on the app default, not a real carry
+mega|2026-08-16|13:00 0 74340 Opened on the app default, not a real carry
+mega|2026-08-16|18:30 0 72630 Opened on the app default, not a real carry
+mega|2026-08-17|18:30 0 72630 Opened on the app default, not a real carry
+mega|2026-08-18|18:30 0 72630 Opened on the app default, not a real carry
+mega|2026-08-19|18:30 2520 63140 
+mega|2026-08-20|18:30 0 64770 
+mega|2026-08-21|18:30 0 67750 
+mega|2026-08-22|13:00 0 71340 Next session opened past this one, so its additions were skipped
+mega|2026-08-22|18:30 21620 47040 
+mega|2026-08-23|18:30 0 49360 
+mega|2026-08-24|18:30 0 52550 
+mega|2026-08-25|18:30 0 54110 
+mega|2026-08-26|18:30 0 55520 
+mega|2026-08-27|18:30 0 56880 
+mega|2026-08-28|18:30 59560 0 
+mega|2026-08-29|13:00 0 3470 
+mega|2026-08-29|18:30 0 5630 
+mega|2026-08-30|13:00 0 9130 Next session opened $600 higher
+mega|2026-08-30|18:30 0 11180 Next opening $600 lower, reversing the raise before
+mega|2026-08-31|18:30 0 13720 
+mega|2026-09-01|18:30 0 15120 
+mega|2026-09-02|18:30 0 16470 
+mega|2026-09-03|18:30 0 17960 Next session opened past this one, so its additions were skipped
+mega|2026-09-04|18:30 0 16240 
+mega|2026-09-05|13:00 0 19190 
+mega|2026-09-05|18:30 0 21290 
+mega|2026-09-06|13:00 0 23580 
+mega|2026-09-06|18:30 0 30530 Next opening raised $4,240 to restore skipped additions
+mega|2026-09-07|18:30 30000 5170 
+mega|2026-09-08|18:30 0 6390 
+mega|2026-09-09|18:30 0 7620 
+mega|2026-09-10|18:30 0 9110 
+mega|2026-09-11|18:30 0 11580 
+mega|2026-09-12|13:00 0 14700 
+mega|2026-09-12|18:30 0 17300 
+mega|2026-09-13|13:00 0 20040 
+mega|2026-09-13|18:30 0 22450 
+mega|2026-09-14|18:30 0 25340 
+mega|2026-09-15|18:30 0 26570 
+mega|2026-09-16|18:30 0 27930 
+mega|2026-09-17|18:30 0 29420 
+mega|2026-09-18|18:30 30000 2200 
+mega|2026-09-19|13:00 0 4960 
+mega|2026-09-19|18:30 7380 0 Amount is the pot drop found one session later
+mega|2026-09-20|13:00 0 2820 Pot drop credited to the hit ticked the session before
+mega|2026-09-20|18:30 0 5150 
+mega|2026-09-21|18:30 0 7960 
+mega|2026-09-22|18:30 9330 0 Amount typed in the Paid box but the ledger saved 0
+mega|2026-09-23|18:30 0 1480 
+mega|2026-09-24|18:30 0 2890 
+mega|2026-09-25|18:30 0 5850 
+mega|2026-09-26|13:00 0 8670 
+mega|2026-09-26|18:30 0 10960 
+mega|2026-09-27|13:00 0 13670 
+mega|2026-09-27|18:30 0 16060 
+mega|2026-09-28|18:30 0 19060 
+mega|2026-09-29|18:30 21020 0 Amount typed in the Paid box but the ledger saved 0
+mega|2026-09-30|18:30 0 1290 
+mega|2026-10-01|18:30 0 2740 
+mega|2026-10-02|18:30 0 5660 
+mega|2026-10-03|13:00 0 8610 
+mega|2026-10-03|18:30 0 10930 
+mega|2026-10-04|13:00 0 13650 
+mega|2026-10-04|18:30 0 16160 
+mega|2026-10-05|18:30 0 18850 
+mega|2026-10-06|18:30 0 20460 
+mega|2026-10-07|18:30 0 22050 
+mega|2026-10-08|18:30 16160 7400 
+mega|2026-10-09|18:30 0 9670 
+rwc_hotball|2026-08-12|18:30 0 10575 Opened on the app default, not a real carry
+rwc_hotball|2026-08-13|18:30 0 10580 Opened on the app default, not a real carry
+rwc_hotball|2026-08-18|18:30 0 10580 Opened on the app default, not a real carry
+rwc_hotball|2026-08-19|18:30 0 13665 
+rwc_hotball|2026-08-20|18:30 0 14490 
+rwc_hotball|2026-08-25|18:30 0 15275 
+rwc_hotball|2026-08-26|18:30 0 16000 
+rwc_hotball|2026-08-27|18:30 16675 0 
+rwc_hotball|2026-09-01|18:30 0 710 
+rwc_hotball|2026-09-02|18:30 0 1390 
+rwc_hotball|2026-09-03|18:30 0 2150 
+rwc_hotball|2026-09-08|18:30 0 2750 
+rwc_hotball|2026-09-09|18:30 0 3385 
+rwc_hotball|2026-09-10|18:30 0 4155 
+rwc_hotball|2026-09-15|18:30 4770 0 
+rwc_hotball|2026-09-16|18:30 680 0 
+rwc_hotball|2026-09-17|18:30 0 775 
+rwc_hotball|2026-09-22|18:30 0 1475 
+rwc_hotball|2026-09-23|18:30 2225 0 
+rwc_hotball|2026-09-24|18:30 0 740 
+rwc_hotball|2026-09-29|18:30 0 1730 
+rwc_hotball|2026-09-30|18:30 0 2405 
+rwc_hotball|2026-10-01|18:30 0 3140 
+rwc_hotball|2026-10-06|18:30 0 3950 
+rwc_hotball|2026-10-07|18:30 0 4775 
+rwc_hotball|2026-10-08|18:30 0 5550 
+sc_hotball|2026-08-15|13:00 0 10580 Opened on the app default, not a real carry
+sc_hotball|2026-08-16|13:00 0 11490 Opened on the app default, not a real carry
+sc_hotball|2026-08-16|18:30 0 10580 Opened on the app default, not a real carry
+sc_hotball|2026-08-17|18:30 0 10580 Opened on the app default, not a real carry
+sc_hotball|2026-08-21|18:30 0 26600 
+sc_hotball|2026-08-22|13:00 0 28450 Next session opened past this one, so its additions were skipped
+sc_hotball|2026-08-22|18:30 0 31790 Next session opened $4,735 higher
+sc_hotball|2026-08-23|18:30 0 32960 
+sc_hotball|2026-08-24|18:30 0 34560 
+sc_hotball|2026-08-28|18:30 0 35910 
+sc_hotball|2026-08-29|13:00 0 37465 
+sc_hotball|2026-08-29|18:30 0 38560 
+sc_hotball|2026-08-30|13:00 0 40385 Next session opened $300 higher
+sc_hotball|2026-08-30|18:30 30000 11700 Net of the $300 raise the session before
+sc_hotball|2026-08-31|18:30 12660 0 
+sc_hotball|2026-09-04|18:30 0 1275 
+sc_hotball|2026-09-05|13:00 0 2820 
+sc_hotball|2026-09-05|18:30 0 3880 
+sc_hotball|2026-09-06|13:00 0 5055 
+sc_hotball|2026-09-06|18:30 0 6415 
+sc_hotball|2026-09-07|18:30 0 8770 
+sc_hotball|2026-09-11|18:30 0 10015 
+sc_hotball|2026-09-12|13:00 0 11650 
+sc_hotball|2026-09-12|18:30 0 12950 
+sc_hotball|2026-09-13|13:00 0 14355 
+sc_hotball|2026-09-13|18:30 0 15565 
+sc_hotball|2026-09-14|18:30 0 17030 
+sc_hotball|2026-09-18|18:30 0 18430 
+sc_hotball|2026-09-19|13:00 0 19875 
+sc_hotball|2026-09-19|18:30 0 21165 
+sc_hotball|2026-09-20|13:00 0 22650 
+sc_hotball|2026-09-20|18:30 0 23830 
+sc_hotball|2026-09-21|18:30 0 25235 
+sc_hotball|2026-09-25|18:30 0 26740 
+sc_hotball|2026-09-26|13:00 0 28245 
+sc_hotball|2026-09-26|18:30 0 29405 
+sc_hotball|2026-09-27|13:00 0 30845 
+sc_hotball|2026-09-27|18:30 0 32045 
+sc_hotball|2026-09-28|18:30 0 33555 
+sc_hotball|2026-10-02|18:30 0 35030 
+sc_hotball|2026-10-03|13:00 30000 6560 
+sc_hotball|2026-10-03|18:30 0 8090 
+sc_hotball|2026-10-04|13:00 0 9515 
+sc_hotball|2026-10-04|18:30 10770 0 
+sc_hotball|2026-10-05|18:30 0 1345 
+sc_hotball|2026-10-09|18:30 0 2505 

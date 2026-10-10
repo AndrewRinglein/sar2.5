@@ -156,6 +156,8 @@ const { renderUnitEconomics } = await import('../src/screens/unit-economics.js')
 const { renderForecast } = await import('../src/screens/forecast.js');
 const { renderAsk } = await import('../src/screens/ask.js');
 const { renderNotifications } = await import('../src/screens/notifications.js');
+const { renderHotball } = await import('../src/screens/hotball.js');
+const { projectHotballRow, projectMovementRow } = await import('../src/lib/ops-schema.js');
 const { renderCompetition } = await import('../src/screens/competition.js');
 const { inspectorIdle } = await import('../src/components/inspector.js');
 const { renderRail } = await import('../src/components/rail.js');
@@ -266,6 +268,18 @@ function hostileBundle() {
 }
 
 const DATA = hostileBundle();
+
+/** Hotball rows from the live fixture, every free-text field poisoned —
+ *  including the hall id, which becomes part of a pot's name. */
+const HOTBALL_DATA = (() => {
+  const rows = JSON.parse(readFileSync(new URL('./fixtures/hotball-2026-10-09.json', import.meta.url), 'utf8'))
+    .map((r, i) => projectHotballRow({ ...r, slot_name: HOSTILE, override_reason: HOSTILE,
+      overridden: i % 7 === 0 ? 'true' : r.overridden, hall_id: i % 2 ? r.hall_id : `${r.hall_id}${HOSTILE}` }));
+  const movements = ['payout', 'cash_in', 'cash_out', 'count'].map((kind, i) => projectMovementRow({
+    id: i, pot_key: 'mega', movement_date: '2026-10-08', session_time: '18:30', kind, amount: '10', note: HOSTILE }));
+  return { ...DATA, schedule: { ...DATA.schedule, ok: true, hotball: { ok: true, rows, movements, movementsOk: true } } };
+})();
+const hotball = (props) => renderHotball({ ...props, data: HOTBALL_DATA });
 const nav = () => {};
 const run = (fn, params, data = DATA) => (inspect) => fn({
   data, params, onNavigate: nav, setInspectorContent: inspect,
@@ -347,6 +361,8 @@ const CASES = [
   ['ask', renderAsk, {}],
   ['ask hostile', renderAsk, hostileParams()],
   ['notifications', renderNotifications, {}],
+  ...['mega', 'rwc_hotball', 'sc_hotball', HOSTILE].map((pot) => ['hotball', hotball, { pot }]),
+  ['hotball hostile params', hotball, hostileParams()],
   ['notifications hostile', renderNotifications, hostileParams()],
 ];
 

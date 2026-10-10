@@ -12,6 +12,7 @@ import { indexMetrics } from './lib/model.js';
 import { renderSession } from './screens/session.js';
 import { renderLeaderboard } from './screens/leaderboard.js';
 import { renderJackpots } from './screens/jackpots.js';
+import { renderHotball } from './screens/hotball.js';
 import { renderMonthlyPL } from './screens/monthly-pl.js';
 import { renderCompare } from './screens/compare.js';
 import { renderVenues } from './screens/venues.js';
@@ -213,7 +214,7 @@ function mountScreen(node) {
  * They show a loading note instead, and render once it lands. Screens not
  * listed here render at once; those in OPS_REFRESH re-render when it lands.
  */
-const OPS_WAIT = new Set(['managers', 'staff-overview', 'commission', 'inventory', 'forecast', 'unit-economics', 'sources']);
+const OPS_WAIT = new Set(['managers', 'staff-overview', 'commission', 'inventory', 'forecast', 'unit-economics', 'sources', 'hotball']);
 const OPS_REFRESH = new Set(['session']);
 
 /**
@@ -249,6 +250,7 @@ function renderScreen(route, data) {
     session: renderSession,
     leaderboard: renderLeaderboard,
     jackpots: renderJackpots,
+    hotball: renderHotball,
     'monthly-pl': renderMonthlyPL,
     compare: renderCompare,
     venues: renderVenues,

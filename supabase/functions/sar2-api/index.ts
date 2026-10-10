@@ -329,6 +329,89 @@ function projectValidatorRow(row = {}) {
   }));
   return out;
 }
+var HOTBALL_POTS = Object.freeze(["hotball", "mega_hotball"]);
+var HOTBALL_LEDGER_FIELDS = Object.freeze({
+  key: "pot",
+  carry_over: "opening",
+  added: "added",
+  total: "total",
+  paid_out: "paid_ledger",
+  was_hit: "hit_ledger",
+  carry_forward: "closing_ledger",
+  overridden: "overridden",
+  override_reason: "override_reason"
+});
+var HOTBALL_TYPED_FIELDS = Object.freeze({
+  hit: "typed_hit",
+  paid: "typed_paid",
+  carryEdited: "carry_edited"
+});
+var HOTBALL_ROW_FIELDS = Object.freeze([
+  "hall_id",
+  "session_date",
+  "session_time",
+  "slot_name",
+  "status",
+  ...Object.values(HOTBALL_LEDGER_FIELDS),
+  ...Object.values(HOTBALL_TYPED_FIELDS),
+  "typed_hits_any"
+]);
+var HOTBALL_MOVEMENTS_TABLE = "hotball_cash_movements";
+var HOTBALL_MOVEMENT_FIELDS = Object.freeze([
+  "id",
+  "pot_key",
+  "movement_date",
+  "session_time",
+  "kind",
+  "amount",
+  "note"
+]);
+var HOTBALL_MOVEMENT_GRANT = Object.freeze([
+  ...HOTBALL_MOVEMENT_FIELDS,
+  "created_at",
+  "voided_at"
+]);
+var numOrNull = (v) => {
+  if (v === null || v === void 0 || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
+var boolOf = (v) => v === true || v === "true";
+var textOf = (v) => typeof v === "string" ? v : null;
+function projectHotballRow(row = {}) {
+  return {
+    hall_id: textOf(row.hall_id),
+    session_date: textOf(row.session_date),
+    session_time: textOf(row.session_time),
+    slot_name: textOf(row.slot_name),
+    status: textOf(row.status),
+    pot: HOTBALL_POTS.includes(row.pot) ? row.pot : null,
+    opening: numOrNull(row.opening),
+    added: numOrNull(row.added),
+    total: numOrNull(row.total),
+    paid_ledger: numOrNull(row.paid_ledger),
+    hit_ledger: boolOf(row.hit_ledger),
+    closing_ledger: numOrNull(row.closing_ledger),
+    overridden: boolOf(row.overridden),
+    override_reason: textOf(row.override_reason),
+    typed_hit: boolOf(row.typed_hit),
+    typed_paid: numOrNull(row.typed_paid),
+    carry_edited: boolOf(row.carry_edited),
+    typed_hits_any: boolOf(row.typed_hits_any)
+  };
+}
+var MOVEMENT_KINDS = Object.freeze(["payout", "cash_out", "cash_in", "count"]);
+function projectMovementRow(row = {}) {
+  return {
+    id: row.id === null || row.id === void 0 ? null : String(row.id),
+    pot_key: textOf(row.pot_key),
+    movement_date: textOf(row.movement_date),
+    session_time: textOf(row.session_time),
+    kind: MOVEMENT_KINDS.includes(row.kind) ? row.kind : null,
+    amount: numOrNull(row.amount),
+    note: textOf(row.note)
+  };
+}
 var MANAGER_ROLES = Object.freeze(["MOD", "Paymaster", "Flash Manager"]);
 var PAY_TOKENS = Object.freeze([
   "pay",
@@ -386,7 +469,9 @@ function isPayColumn(column) {
 function assertNoPayColumns(columns = {
   ...COLUMNS,
   [VALIDATOR_TABLE]: VALIDATOR_COLUMNS.join(","),
-  [`${VALIDATOR_TABLE}.crew`]: VALIDATOR_CREW_FIELDS.join(",")
+  [`${VALIDATOR_TABLE}.crew`]: VALIDATOR_CREW_FIELDS.join(","),
+  [`${VALIDATOR_TABLE}.hotball`]: HOTBALL_ROW_FIELDS.join(","),
+  [HOTBALL_MOVEMENTS_TABLE]: HOTBALL_MOVEMENT_GRANT.join(",")
 }) {
   const bad = [];
   for (const [table, cols] of Object.entries(columns)) {
@@ -477,6 +562,57 @@ async function readValidator(connection) {
     return { ok: false, rows: [] };
   }
 }
+var arrayAt = (expr) => `CASE WHEN jsonb_typeof(${expr}) = 'array' THEN ${expr} ELSE '[]'::jsonb END`;
+var HOTBALL_SQL = [
+  "SELECT s.hall_id, s.session_date::text AS session_date,",
+  "  to_char(s.session_time, 'HH24:MI') AS session_time, s.slot_name, s.status,",
+  ...Object.entries(HOTBALL_LEDGER_FIELDS).map(([k, as]) => `  l.value ->> '${k}' AS ${as},`),
+  ...Object.entries(HOTBALL_TYPED_FIELDS).map(([k, as]) => `  t.value ->> '${k}' AS ${as},`),
+  "  (jsonb_typeof(t.value -> 'hits') = 'array' AND t.value -> 'hits' @> '[true]'::jsonb)::text AS typed_hits_any",
+  'FROM public."recon_sessions" s',
+  `CROSS JOIN LATERAL jsonb_array_elements(${arrayAt("s.hotball_ledger")}) AS l(value)`,
+  `LEFT JOIN LATERAL (SELECT x.value FROM jsonb_array_elements(${arrayAt("s.state #> '{pm,hot}'")}) AS x(value)`,
+  "  WHERE x.value ->> 'key' = l.value ->> 'key' LIMIT 1) AS t ON true",
+  `WHERE l.value ->> 'key' IN (${HOTBALL_POTS.map((p) => `'${p}'`).join(", ")})`,
+  "ORDER BY s.session_date, s.session_time"
+].join("\n");
+var HOTBALL_MOVEMENTS_SQL = [
+  "SELECT id::text AS id, pot_key, movement_date::text AS movement_date,",
+  "  to_char(session_time, 'HH24:MI') AS session_time, kind, amount::text AS amount, note",
+  `FROM public."${HOTBALL_MOVEMENTS_TABLE}"`,
+  "WHERE voided_at IS NULL",
+  "ORDER BY movement_date, created_at, id"
+].join("\n");
+if (Object.keys(projectMovementRow({})).join() !== HOTBALL_MOVEMENT_FIELDS.join()) {
+  throw new Error("ops-read: movement projection and allowlist disagree");
+}
+async function readHotball(connection) {
+  const out = { ok: false, rows: [], movements: [], movementsOk: false };
+  try {
+    await connection.query("SAVEPOINT hotball");
+    const { rows } = await connection.query(HOTBALL_SQL);
+    await connection.query("RELEASE SAVEPOINT hotball");
+    out.ok = true;
+    out.rows = (rows ?? []).map(projectHotballRow).filter((r) => r.pot);
+  } catch {
+    await connection.query("ROLLBACK TO SAVEPOINT hotball").catch(() => {
+    });
+    console.warn("SAR: hotball pots unavailable; other Operations data still loaded.");
+    return out;
+  }
+  try {
+    await connection.query("SAVEPOINT hotball_moves");
+    const { rows } = await connection.query(HOTBALL_MOVEMENTS_SQL);
+    await connection.query("RELEASE SAVEPOINT hotball_moves");
+    out.movementsOk = true;
+    out.movements = (rows ?? []).map(projectMovementRow).filter((m) => m.kind && m.pot_key);
+  } catch {
+    await connection.query("ROLLBACK TO SAVEPOINT hotball_moves").catch(() => {
+    });
+    console.warn("SAR: hotball cash movements unavailable.");
+  }
+  return out;
+}
 async function readOperations(pool) {
   assertNoPayColumns();
   const connection = await pool.connect();
@@ -489,6 +625,7 @@ async function readOperations(pool) {
       result[name] = rows;
     }
     result.validator = await readValidator(connection);
+    result.hotball = await readHotball(connection);
     await connection.query("COMMIT");
     return result;
   } catch (error) {

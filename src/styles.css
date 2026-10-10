@@ -1451,3 +1451,30 @@ span.so-db-act { background: var(--series-1); }
 .fc-plan-add form { align-items:end; padding-top:var(--s-3); }
 .fc-plan-add label { display:grid; gap:var(--s-1); }
 .fc-plan-add input { width:10rem; }
+
+/* ---- hotball pots ------------------------------------------------------------
+   Three pot cards that also pick the ledger shown below them. Gold stays on
+   the pot-size line only; drops are marked in --neg, as on Jackpots. */
+.hb-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: var(--s-3); margin-bottom: var(--s-5); }
+.hb-card {
+  display: flex; flex-direction: column; align-items: stretch; gap: 0;
+  text-align: left; font: inherit; color: inherit; cursor: pointer;
+  background: var(--surface); border: 1px solid var(--hair);
+  border-radius: var(--r-lg); padding: var(--s-4); box-shadow: none;
+}
+.hb-card:hover { border-color: var(--accent-line); }
+.hb-card.is-active { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.hb-scope { font-size: var(--t-xs); }
+.hb-stats {
+  display: grid; grid-template-columns: auto 1fr; gap: var(--s-1) var(--s-3);
+  margin-top: var(--s-3); padding-top: var(--s-3); border-top: 1px solid var(--hair-2);
+}
+.hb-stats dt { font-size: var(--t-xs); color: var(--ink-4); text-transform: uppercase; letter-spacing: 0.06em; align-self: center; }
+.hb-stats dd { font-size: var(--t-sm); margin: 0; text-align: right; }
+.hb-scroll { overflow-x: auto; }
+.hb-ledger td, .hb-ledger th { white-space: nowrap; }
+.hb-ledger td.hb-note { white-space: normal; min-width: 16rem; font-size: var(--t-sm); color: var(--ink-3); }
+.hb-ledger tr.hb-dropped td { background: var(--neg-soft); }
+.hb-foot { font-size: var(--t-sm); margin-top: var(--s-3); }
+.hb-scroll-tall { max-height: 70vh; overflow-y: auto; }
+.hb-scroll-tall thead th { position: sticky; top: 0; background: var(--surface); z-index: 1; }

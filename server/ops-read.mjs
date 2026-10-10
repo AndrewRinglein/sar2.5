@@ -7,6 +7,8 @@
 import {
   COLUMNS, assertNoPayColumns, VALIDATOR_TABLE, VALIDATOR_STATE_PATHS,
   VALIDATOR_CREW_FIELDS, projectValidatorRow,
+  HOTBALL_POTS, HOTBALL_LEDGER_FIELDS, HOTBALL_TYPED_FIELDS, projectHotballRow,
+  HOTBALL_MOVEMENTS_TABLE, HOTBALL_MOVEMENT_FIELDS, projectMovementRow,
 } from '../src/lib/ops-schema.js';
 
 /*
@@ -100,6 +102,70 @@ export async function readValidator(connection) {
   }
 }
 
+/**
+ * The hotball read: one row per pot per reconciled session. Every field is
+ * pulled by name as text from one ledger element and its matching typed
+ * element (ops-schema.js says why these and no others). Gremlin is not a pot
+ * and is filtered out here, in SQL.
+ */
+const arrayAt = (expr) => `CASE WHEN jsonb_typeof(${expr}) = 'array' THEN ${expr} ELSE '[]'::jsonb END`;
+export const HOTBALL_SQL = [
+  'SELECT s.hall_id, s.session_date::text AS session_date,',
+  "  to_char(s.session_time, 'HH24:MI') AS session_time, s.slot_name, s.status,",
+  ...Object.entries(HOTBALL_LEDGER_FIELDS).map(([k, as]) => `  l.value ->> '${k}' AS ${as},`),
+  ...Object.entries(HOTBALL_TYPED_FIELDS).map(([k, as]) => `  t.value ->> '${k}' AS ${as},`),
+  "  (jsonb_typeof(t.value -> 'hits') = 'array' AND t.value -> 'hits' @> '[true]'::jsonb)::text AS typed_hits_any",
+  'FROM public."recon_sessions" s',
+  `CROSS JOIN LATERAL jsonb_array_elements(${arrayAt('s.hotball_ledger')}) AS l(value)`,
+  `LEFT JOIN LATERAL (SELECT x.value FROM jsonb_array_elements(${arrayAt("s.state #> '{pm,hot}'")}) AS x(value)`,
+  "  WHERE x.value ->> 'key' = l.value ->> 'key' LIMIT 1) AS t ON true",
+  `WHERE l.value ->> 'key' IN (${HOTBALL_POTS.map((p) => `'${p}'`).join(', ')})`,
+  'ORDER BY s.session_date, s.session_time',
+].join('\n');
+
+export const HOTBALL_MOVEMENTS_SQL = [
+  "SELECT id::text AS id, pot_key, movement_date::text AS movement_date,",
+  "  to_char(session_time, 'HH24:MI') AS session_time, kind, amount::text AS amount, note",
+  `FROM public."${HOTBALL_MOVEMENTS_TABLE}"`,
+  'WHERE voided_at IS NULL',
+  'ORDER BY movement_date, created_at, id',
+].join('\n');
+if (Object.keys(projectMovementRow({})).join() !== HOTBALL_MOVEMENT_FIELDS.join()) {
+  throw new Error('ops-read: movement projection and allowlist disagree');
+}
+
+/**
+ * Read the pots inside the caller's transaction, behind a savepoint, like the
+ * validator. The movements table is newer than the pots; if it cannot be read
+ * the pots still load, and the result says movements are unavailable rather
+ * than pretending there are none. Never throws.
+ */
+export async function readHotball(connection) {
+  const out = { ok: false, rows: [], movements: [], movementsOk: false };
+  try {
+    await connection.query('SAVEPOINT hotball');
+    const { rows } = await connection.query(HOTBALL_SQL);
+    await connection.query('RELEASE SAVEPOINT hotball');
+    out.ok = true;
+    out.rows = (rows ?? []).map(projectHotballRow).filter((r) => r.pot);
+  } catch {
+    await connection.query('ROLLBACK TO SAVEPOINT hotball').catch(() => {});
+    console.warn('SAR: hotball pots unavailable; other Operations data still loaded.');
+    return out;
+  }
+  try {
+    await connection.query('SAVEPOINT hotball_moves');
+    const { rows } = await connection.query(HOTBALL_MOVEMENTS_SQL);
+    await connection.query('RELEASE SAVEPOINT hotball_moves');
+    out.movementsOk = true;
+    out.movements = (rows ?? []).map(projectMovementRow).filter((m) => m.kind && m.pot_key);
+  } catch {
+    await connection.query('ROLLBACK TO SAVEPOINT hotball_moves').catch(() => {});
+    console.warn('SAR: hotball cash movements unavailable.');
+  }
+  return out;
+}
+
 export async function readOperations(pool) {
   assertNoPayColumns();
   const connection = await pool.connect();
@@ -113,6 +179,7 @@ export async function readOperations(pool) {
       result[name] = rows; // Direct SQL has no PostgREST 1,000-row truncation.
     }
     result.validator = await readValidator(connection);
+    result.hotball = await readHotball(connection);
     await connection.query('COMMIT');
     return result;
   } catch (error) {

@@ -10,7 +10,7 @@ test('every screen in the spec has a route', () => {
   // Monthly P&L — they are different screens and both exist — plus Managers,
   // which is new in SAR 2.0 and has no SAR 1.0 counterpart, plus Dashboard,
   // which carries SAR 1.0's six chart panels.
-  assert.equal(Object.keys(SCREENS).length, 22);
+  assert.equal(Object.keys(SCREENS).length, 23);
   assert.ok(SCREENS.competition, 'Bingo Scout must have a route');
   // Notifications and Settings are real SAR 1.0 views that the original gap
   // audit missed entirely. SAR 1.0 has nine: events, leaderboard, compare,

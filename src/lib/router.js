@@ -29,6 +29,7 @@ export const NAV = Object.freeze([
       { id: 'leaderboard', label: 'Leaderboard',    unit: 'U9' },
       { id: 'compare',     label: 'Compare',        unit: 'U18' },
       { id: 'jackpots',    label: 'Jackpots',       unit: 'U17' },
+      { id: 'hotball',     label: 'Hotball pots',   unit: 'Hotball handoff' },
       { id: 'promotions',  label: 'Promotions',     unit: 'U31' },
       { id: 'runners',     label: 'Runners',        unit: 'U20' },
       { id: 'anomaly',     label: 'Anomalies',      unit: 'U21' },

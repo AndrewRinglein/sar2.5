@@ -9,6 +9,7 @@ import { keepDatesAsText, databaseOptions, SECRET_NAME } from './ops-read.mjs';
 export {
   DATE_OID, keepDatesAsText, OPS_PROJECT, SECRET_NAME, databaseOptions,
   VALIDATOR_SQL, readValidator, readOperations, readAnthropicKey,
+  HOTBALL_SQL, HOTBALL_MOVEMENTS_SQL, readHotball,
 } from './ops-read.mjs';
 
 keepDatesAsText(pg.types);

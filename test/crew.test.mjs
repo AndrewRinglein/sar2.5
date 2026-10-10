@@ -777,7 +777,8 @@ test('every route renders with and without validator data', async () => {
   const mods = {
     dashboard: ['dashboard', 'renderDashboard'], session: ['session', 'renderSession'],
     leaderboard: ['leaderboard', 'renderLeaderboard'], compare: ['compare', 'renderCompare'],
-    jackpots: ['jackpots', 'renderJackpots'], promotions: ['promotions', 'renderPromotions'],
+    jackpots: ['jackpots', 'renderJackpots'], hotball: ['hotball', 'renderHotball'],
+    promotions: ['promotions', 'renderPromotions'],
     runners: ['runners', 'renderRunners'], anomaly: ['anomaly', 'renderAnomaly'],
     reporting: ['reporting', 'renderReporting'], 'monthly-pl': ['monthly-pl', 'renderMonthlyPL'],
     'unit-economics': ['unit-economics', 'renderUnitEconomics'], forecast: ['forecast', 'renderForecast'],

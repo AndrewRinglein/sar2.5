@@ -25,6 +25,7 @@ import { JSDOM } from 'jsdom';
 import { renderSession } from '../src/screens/session.js';
 import { renderLeaderboard } from '../src/screens/leaderboard.js';
 import { renderJackpots } from '../src/screens/jackpots.js';
+import { renderHotball } from '../src/screens/hotball.js';
 import { renderMonthlyPL, monthlyRollup } from '../src/screens/monthly-pl.js';
 import { renderCompare } from '../src/screens/compare.js';
 import { renderVenues } from '../src/screens/venues.js';
@@ -2030,7 +2031,7 @@ test('every screen in the nav renders without throwing', async () => {
   const { SCREENS } = await import('../src/lib/router.js');
   const renderers = {
     dashboard: renderDashboard, session: renderSession, leaderboard: renderLeaderboard,
-    compare: renderCompare, jackpots: renderJackpots, promotions: renderPromotions,
+    compare: renderCompare, jackpots: renderJackpots, hotball: renderHotball, promotions: renderPromotions,
     runners: RN.renderRunners, anomaly: renderAnomaly, reporting: RP.renderReporting,
     'monthly-pl': renderMonthlyPL, 'unit-economics': renderUnitEconomics,
     forecast: renderForecast, venues: renderVenues, inventory: renderInventory,
@@ -2067,7 +2068,7 @@ test('every screen survives having no data at all', async () => {
   const { SCREENS } = await import('../src/lib/router.js');
   const renderers = {
     dashboard: renderDashboard, session: renderSession, leaderboard: renderLeaderboard,
-    compare: renderCompare, jackpots: renderJackpots, promotions: renderPromotions,
+    compare: renderCompare, jackpots: renderJackpots, hotball: renderHotball, promotions: renderPromotions,
     runners: RN.renderRunners, anomaly: renderAnomaly, reporting: RP.renderReporting,
     'monthly-pl': renderMonthlyPL, 'unit-economics': renderUnitEconomics,
     forecast: renderForecast, venues: renderVenues, inventory: renderInventory,

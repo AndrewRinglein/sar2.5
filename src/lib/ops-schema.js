@@ -111,6 +111,97 @@ export function projectValidatorRow(row = {}) {
   return out;
 }
 
+/**
+ * Hotball pots — the one part of `recon_sessions` money that IS read.
+ *
+ * The validator read above leaves `hotball_ledger` and `state` out because
+ * they hold cash counts and paymaster lines. The Hotball screen needs the pot
+ * figures, which are the HALL'S money (what a progressive holds), not anyone's
+ * pay, and SAR already shows jackpot balances from the analytics project. So
+ * this read takes exactly the per-pot fields below and nothing else:
+ *
+ *   hotball_ledger[]     one element per pot, fields in HOTBALL_LEDGER_FIELDS
+ *   state -> pm -> hot[] the matching element only, fields in HOTBALL_TYPED_FIELDS
+ *
+ * Each field is pulled by name as TEXT in SQL (server/ops-read.mjs), so no
+ * nested object, no other pot (Gremlin) and no other part of `state` leaves
+ * the database. `projectHotballRow` re-applies the shape on the server.
+ *
+ * Cash movements are read from `hotball_cash_movements`, unvoided only, and
+ * WITHOUT `created_by` / `voided_by` (email addresses). SAR never writes them;
+ * they are recorded in the Session Reconciliation hotball page.
+ */
+export const HOTBALL_POTS = Object.freeze(['hotball', 'mega_hotball']);
+/** hotball_ledger element key → projected field. */
+export const HOTBALL_LEDGER_FIELDS = Object.freeze({
+  key: 'pot', carry_over: 'opening', added: 'added', total: 'total',
+  paid_out: 'paid_ledger', was_hit: 'hit_ledger', carry_forward: 'closing_ledger',
+  overridden: 'overridden', override_reason: 'override_reason',
+});
+/** state.pm.hot element key → projected field. What the paymaster typed. */
+export const HOTBALL_TYPED_FIELDS = Object.freeze({
+  hit: 'typed_hit', paid: 'typed_paid', carryEdited: 'carry_edited',
+});
+export const HOTBALL_ROW_FIELDS = Object.freeze([
+  'hall_id', 'session_date', 'session_time', 'slot_name', 'status',
+  ...Object.values(HOTBALL_LEDGER_FIELDS), ...Object.values(HOTBALL_TYPED_FIELDS),
+  'typed_hits_any',
+]);
+export const HOTBALL_MOVEMENTS_TABLE = 'hotball_cash_movements';
+export const HOTBALL_MOVEMENT_FIELDS = Object.freeze([
+  'id', 'pot_key', 'movement_date', 'session_time', 'kind', 'amount', 'note',
+]);
+/** Columns of hotball_cash_movements that the read filters and orders on. */
+export const HOTBALL_MOVEMENT_GRANT = Object.freeze([
+  ...HOTBALL_MOVEMENT_FIELDS, 'created_at', 'voided_at',
+]);
+
+const numOrNull = (v) => {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
+const boolOf = (v) => v === true || v === 'true';
+const textOf = (v) => (typeof v === 'string' ? v : null);
+
+/** Keep only the allowlisted, typed shape of one hotball row. */
+export function projectHotballRow(row = {}) {
+  return {
+    hall_id: textOf(row.hall_id),
+    session_date: textOf(row.session_date),
+    session_time: textOf(row.session_time),
+    slot_name: textOf(row.slot_name),
+    status: textOf(row.status),
+    pot: HOTBALL_POTS.includes(row.pot) ? row.pot : null,
+    opening: numOrNull(row.opening),
+    added: numOrNull(row.added),
+    total: numOrNull(row.total),
+    paid_ledger: numOrNull(row.paid_ledger),
+    hit_ledger: boolOf(row.hit_ledger),
+    closing_ledger: numOrNull(row.closing_ledger),
+    overridden: boolOf(row.overridden),
+    override_reason: textOf(row.override_reason),
+    typed_hit: boolOf(row.typed_hit),
+    typed_paid: numOrNull(row.typed_paid),
+    carry_edited: boolOf(row.carry_edited),
+    typed_hits_any: boolOf(row.typed_hits_any),
+  };
+}
+
+export const MOVEMENT_KINDS = Object.freeze(['payout', 'cash_out', 'cash_in', 'count']);
+/** Keep only the allowlisted shape of one cash movement. */
+export function projectMovementRow(row = {}) {
+  return {
+    id: row.id === null || row.id === undefined ? null : String(row.id),
+    pot_key: textOf(row.pot_key),
+    movement_date: textOf(row.movement_date),
+    session_time: textOf(row.session_time),
+    kind: MOVEMENT_KINDS.includes(row.kind) ? row.kind : null,
+    amount: numOrNull(row.amount),
+    note: textOf(row.note),
+  };
+}
+
 /** The three roles this feature is about. Read from data, matched by name. */
 export const MANAGER_ROLES = Object.freeze(['MOD', 'Paymaster', 'Flash Manager']);
 
@@ -176,6 +267,8 @@ export function isPayColumn(column) {
 export function assertNoPayColumns(columns = {
   ...COLUMNS, [VALIDATOR_TABLE]: VALIDATOR_COLUMNS.join(','),
   [`${VALIDATOR_TABLE}.crew`]: VALIDATOR_CREW_FIELDS.join(','),
+  [`${VALIDATOR_TABLE}.hotball`]: HOTBALL_ROW_FIELDS.join(','),
+  [HOTBALL_MOVEMENTS_TABLE]: HOTBALL_MOVEMENT_GRANT.join(','),
 }) {
   const bad = [];
   for (const [table, cols] of Object.entries(columns)) {

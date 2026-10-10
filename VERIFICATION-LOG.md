@@ -1016,3 +1016,33 @@ Numbers fixed today and why: see the commit "Fix wrong numbers" (breaks per
 workday, session prediction range: 81% → 93% measured coverage on 762 live
 nights, per-session staff hours, org-wide jackpot hits, YoY partial month,
 Pacific dates).
+
+## 2026-10-09 — Hotball pots, from the developer handoff
+
+New screen **Hotball pots** (Sessions → after Jackpots): the three pots night by
+night (opening, added, Paid box, pot drop, pot after, next opening), every
+night a pot dropped with its basis, and each pot's current size. Read-only:
+cash movements are recorded in Session Reconciliation's hotball page and are
+applied here, never written. Drops found from a lower next opening are counted
+automatically and labelled as such (owner's choice, 9 Oct).
+
+Data: `recon_sessions.hotball_ledger` and the matching `state.pm.hot` element,
+each field pulled by name as text (`HOTBALL_SQL`, server/ops-read.mjs); the
+validator read is unchanged and still never selects the ledger. Movements:
+`hotball_cash_movements`, unvoided, without `created_by` / `voided_by`.
+
+| Check | Expected | SAR 2.0 | Verdict |
+|---|---|---|---|
+| Every pot row (144) vs the handoff's reference SQL, run in the same query as the read | drop, pot after and note per row | identical, all 144 | match |
+| Cut off at 8 Oct (the handoff's snapshot: 71 sessions) — pot now | Mega $23,560 · RWC $5,550 · SC $1,345 | identical | match |
+| — last drop, sessions since, added since | Mega $21,020 Sep 29, 11, $23,560 · RWC $2,225 Sep 23, 7, $5,550 · SC $10,770 Oct 4, 1, $1,345 | identical | match |
+| — pot drops | 16 nights, $289,210, each basis as listed | identical, same order and basis | match |
+| Live (72 sessions, SC Fri 9 Oct still open) | — | Mega $9,670 · RWC $5,550 · SC $2,505; 17 drops, $305,370 | new: SC 9 Oct opened the Mega at $7,400 after RWC 8 Oct closed at $23,560, so a $16,160 pot drop is found on RWC Thu 8 Oct |
+| Movements | a recorded drop replaces the derived one; a cash in balances a raise; counts compare with pot after | unit-tested on the live fixture | match |
+| Screen | 1400 px and 390 px, rendered with the live fixture in headless Chromium | no page overflow; ledger scrolls inside its panel | checked by screenshot |
+
+Not yet seen signed in on the live site: the Edge Function must be redeployed
+for the read to reach the browser. On the laptop, `sar_reader` needs the two
+new grants in `scripts/create-sar-reader.sql` (`hotball_ledger` on
+`recon_sessions`, and `hotball_cash_movements`); until then the screen says the
+pots are not connected and every other screen is unaffected.
